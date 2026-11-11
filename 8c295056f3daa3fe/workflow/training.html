@@ -1,0 +1,41 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · training</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="routing.html">Routing</a><a href="model.html">Model</a><a href="analysis.html">Analysis</a><a href="detection.html">Detection</a><a href="training.html" class="on">Training</a><a href="benchmark.html">Benchmark</a><a href="cli.html">CLI</a><a href="nbm.html">.nbm</a><a href="roadmap.html">Roadmap</a></nav><h1 id="training">Training</h1>
+<pre><code>import felix as fx
+import workflow as wf
+
+dataset = fx.load("./dataset.felix")           # or a folder; model.train also accepts the path directly
+model.train(dataset, epochs=100, batch_size=16, save_every=5)</code></pre>
+<p>Training uses <strong>Felix</strong> datasets; Workflow has no loader of its own. A Felix dataset provides <code>dataset.train</code>, <code>dataset.val</code> and <code>dataset.test</code>: datasets converted from COCO keep their <code>split</code>, generated ones are split deterministically 80/10/10 (<a href="../felix/formats.html">Felix formats</a>). Training uses the train split and validates on the val split every epoch.</p>
+<h2 id="model-train"><code>model.train(...)</code></h2>
+<table><thead><tr><th>Argument</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td><code>dataset</code></td><td>required</td><td>Felix dataset object or path</td></tr><tr><td><code>epochs</code></td><td>100</td><td><strong>total</strong> target epoch count (see Continuing)</td></tr><tr><td><code>batch_size</code></td><td>16</td><td>images per step</td></tr><tr><td><code>save_every</code></td><td>5</td><td>also write <code>epoch_N.nbm</code> every N epochs (<code>None</code>: only last/best)</td></tr><tr><td><code>lr</code></td><td>1e-3</td><td>peak learning rate</td></tr><tr><td><code>imgsz</code></td><td>the model's input</td><td>training size (int or <code>(H, W)</code>)</td></tr><tr><td><code>device</code></td><td>auto</td><td>otherwise the device set with <code>model.device(...)</code></td></tr><tr><td><code>workers</code></td><td>auto</td><td>data-loading processes: 0 on Windows/macOS, up to 4 on Linux</td></tr><tr><td><code>patience</code></td><td>30</td><td>early stopping: stop after this many epochs without improvement (<code>None</code> disables)</td></tr><tr><td><code>save_dir</code></td><td><code>runs/train</code></td><td>where <code>.nbm</code> files go</td></tr><tr><td><code>amp</code></td><td>auto</td><td>mixed precision (CUDA only)</td></tr><tr><td><code>ema</code></td><td>True</td><td>keep an exponential moving average of the weights, used for validation and saved as the model</td></tr><tr><td><code>augment</code></td><td>True</td><td>horizontal flip + brightness/contrast jitter</td></tr><tr><td><code>val</code></td><td>True</td><td>validate every epoch</td></tr><tr><td><code>quiet</code></td><td>False</td><td>no progress panel</td></tr></tbody></table>
+<p>Returns the training <strong>history</strong>: one dict per epoch with <code>epoch</code>, <code>loss</code>, <code>box</code>, <code>obj</code>, <code>cls</code>, <code>lr</code>, <code>seconds</code>, <code>map50</code>, <code>map50_95</code>, <code>precision</code>, <code>recall</code>, <code>f1</code> and <code>fitness</code>. It is also kept in <code>model.history</code>.</p>
+<p><code>model.train(False)</code> and <code>model.train()</code> keep their usual torch meaning (<code>eval()</code> / train mode).</p>
+<h2 id="defaults-and-what-they-do">Defaults and what they do</h2>
+<ul><li><strong>Optimizer</strong> AdamW, weight decay 5e-4 on weights only (not BatchNorm / biases).</li><li><strong>Schedule</strong> linear warm-up (about 3 epochs, at least 100 steps) then cosine decay to 1% of <code>lr</code>.</li><li><strong>Gradient clipping</strong> at norm 10; training stops with a clear error if the loss becomes NaN.</li><li><strong>Best model</strong> is chosen by validation fitness <code>0.1 × mAP50 + 0.9 × mAP50-95</code> (by training loss if there is no validation split).</li><li><strong>Speed</strong>: mixed precision on CUDA, cuDNN autotuning, pinned memory and worker processes where supported.</li></ul>
+<h2 id="saved-files">Saved files</h2>
+<p>Written to <code>save_dir</code> as <code>.nbm</code>: <code>last.nbm</code> after every epoch, <code>best.nbm</code> on every new best, and <code>epoch_N.nbm</code> every <code>save_every</code> epochs. Each holds the weights (EMA), architecture, class names, history, optimizer state and the raw weights needed to continue exactly. See <a href="nbm.html">.nbm format</a>.</p>
+<h2 id="safe-interruption">Safe interruption</h2>
+<p>Press <strong>Ctrl+C</strong> at any time: training stops, the current state is saved to <code>save_dir/last.nbm</code>, and <code>model.train</code> returns normally with the history so far. The epoch counter in the file is the last *completed* epoch.</p>
+<h2 id="continuing">Continuing</h2>
+<pre><code>model = wf.load("runs/train/last.nbm")        # or model.load(...) into an identical architecture
+model.train(dataset, epochs=150, batch_size=16)</code></pre>
+<p><code>epochs</code> is the <strong>total</strong> target: a run that stopped at epoch 80 continues from epoch 81 to 150. The optimizer state, raw weights, EMA and history are restored. If a file has no optimizer state, or it doesn't fit, a fresh optimizer is created. The learning-rate schedule is a function of progress towards the new target, so it stretches to the new <code>epochs</code> rather than restarting. If the model already reached the target, nothing runs.</p>
+<h2 id="errors-you-may-meet">Errors you may meet</h2>
+<table><thead><tr><th>Message</th><th>Cause</th></tr></thead><tbody><tr><td><code>the dataset has 3 classes … but the model's BBoxHead was built with classes=1</code></td><td>rebuild the head with the dataset's class count</td></tr><tr><td><code>this model has no BBoxHead</code></td><td>end the last stage with <code>wf.BBoxHead(...)</code></td></tr><tr><td><code>the loss became NaN/inf</code></td><td>lower <code>lr</code>, check the dataset's boxes</td></tr><tr><td><code>the training split is empty</code></td><td>the dataset has fewer than 10 pairs and no splits</td></tr></tbody></table></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

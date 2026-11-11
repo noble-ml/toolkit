@@ -1,0 +1,41 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · routing</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="routing.html" class="on">Routing</a><a href="model.html">Model</a><a href="analysis.html">Analysis</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="benchmark.html">Benchmark</a><a href="cli.html">CLI</a><a href="nbm.html">.nbm</a><a href="roadmap.html">Roadmap</a></nav><h1 id="routing">Routing</h1>
+<p>Ordinary stages need no wiring: each reads the previous stage's output. Routing is for everything else, and it is always <strong>by name</strong>; Workflow never picks a feature map by position or channel count.</p>
+<h2 id="names">Names</h2>
+<p>Every tensor that can be referenced has one name:</p>
+<ul><li>the model input is <code>"input"</code> (reserved)</li><li>a stage publishes its final output under the <strong>stage name</strong></li><li>an operation that produces several tensors publishes them under the names given by its <code>outputs=</code></li></ul>
+<p>All published names live in one namespace and must be unique.</p>
+<h2 id="reading-earlier-outputs">Reading earlier outputs</h2>
+<p><strong>Whole stage from another point</strong>: <code>input=</code> on the stage.</p>
+<pre><code>wf.Stage("head", wf.Conv2D(64, 32, 1), input="p2")     # reads p2, not the previous stage</code></pre>
+<p><strong>Operations that combine tensors</strong> (<a href="blocks.html#routing-blocks">Concat, Add, FPN, PAN</a>, or your own) declare <code>inputs=("a", "b")</code>. Such an operation reads exactly those names and ignores the running tensor.</p>
+<h2 id="several-outputs">Several outputs</h2>
+<p>An operation declares <code>outputs=("n3", "n4", "n5")</code>, one name per tensor it returns. Rules:</p>
+<ol><li>It must be the <strong>last</strong> operation of its stage.</li><li>The stage then publishes those names, and <strong>not</strong> its own name.</li><li>The next stage can't silently take "the output": it must say which, with <code>input="n3"</code> or an operation with <code>inputs=(...)</code>.</li></ol>
+<pre><code>wf.Stage("neck", wf.FPN(inputs=("p3", "p4", "p5"), channels=128, outputs=("n3", "n4", "n5"))),
+wf.Stage("pan",  wf.PAN(inputs=("n3", "n4", "n5"), channels=128, outputs=("m3", "m4", "m5"))),
+wf.Stage("head3", wf.Conv2D(128, 64, 3, padding=1), input="m3"),</code></pre>
+<p>Here <code>neck</code> publishes <code>n3</code>, <code>n4</code>, <code>n5</code> (not <code>neck</code>), and <code>pan</code> reads exactly those. Full runnable version: <code>examples/phase2.py</code>.</p>
+<h2 id="custom-operations">Custom operations</h2>
+<p>Subclass <code>wf.Op</code>, implement <code>forward(*tensors)</code> and <code>infer(*shapes)</code>, set <code>self.inputs</code> / <code>self.outputs</code> in <code>__init__</code>. Anything built this way is routed, validated and serialized like a built-in. (See <code>tests/test_phase1.py</code> for tiny examples.)</p>
+<h2 id="validation-and-errors">Validation and errors</h2>
+<p>Checked when the <code>Model</code> is created:</p>
+<table><thead><tr><th>Problem</th><th>Message (abridged)</th></tr></thead><tbody><tr><td>unknown name</td><td><code>Stage 'p2', op 1 FPN refers to unknown name 'p9' (did you mean 'p3'?). Names available here: input, p1, p2</code></td></tr><tr><td>reference to a later stage</td><td><code>… refers to 'x', which is produced by stage 'x' later in the model. Stages run in the order they are listed</code></td></tr><tr><td>circular dependency</td><td><code>circular dependency between stages (each one needs the next): a → b → a</code></td></tr><tr><td>duplicate stage / published name</td><td><code>duplicate stage name 'a'</code> / <code>the name 'n3' is published by both stage … and stage …</code></td></tr><tr><td>ambiguous flow after multi-output</td><td><code>Stage 't' follows stage 's', which publishes several outputs ('x', 'y'). Say which one it reads</code></td></tr><tr><td>stage name used for a multi-output stage</td><td><code>… stage 's' publishes several outputs ('x', 'y'); refer to one of them by name</code></td></tr><tr><td>multi-output op not last / undeclared</td><td><code>… must be the last operation of its stage</code> / <code>produces 2 outputs; name them with outputs=(...)</code></td></tr><tr><td>FPN/PAN inputs not ordered / not halving</td><td><code>inputs must be ordered from the largest feature map to the smallest, but 'p5' is 20x20 and 'p4' is 40x40</code> / <code>each input must be half the size of the previous one</code></td></tr><tr><td>missing output names</td><td><code>FPN needs outputs=(...): one name per input (3 names), e.g. outputs=('n0', 'n1', 'n2')</code></td></tr><tr><td>shape mismatch</td><td><code>Stage 'p2' → op 1 Conv2D (output of 'p1'): expects 64 input channels but received 32</code></td></tr></tbody></table>
+<p>Intermediate tensors that nothing reads later are freed automatically during the forward pass.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

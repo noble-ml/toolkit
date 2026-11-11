@@ -2,28 +2,29 @@
 :root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-main{max-width:46rem;margin:0 auto;padding:2.5rem 16px 5rem}
-nav{display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;margin-bottom:2.5rem;font-size:.9rem}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
 nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
-nav b{color:var(--fg);margin-right:1rem}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
 h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
 h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
 a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
-p,li{color:var(--fg)}code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
 pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
 pre code{background:none;padding:0}
 table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
 th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
-</style></head><body><main><nav><b>felix</b><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="api.html">API</a><a href="cli.html">CLI</a><a href="formats.html" class="on">Formats</a></nav><h1>Dataset formats</h1>
-<h2>Folder</h2>
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="api.html">API</a><a href="cli.html">CLI</a><a href="formats.html" class="on">Formats</a></nav><h1 id="dataset-formats">Dataset formats</h1>
+<h2 id="folder">Folder</h2>
 <pre><code>dataset/
 ├── images/IMG1.png ...        (converted datasets may keep .jpg)
 ├── annotations/IMG1.yml ...
 └── metadata.yml</code></pre>
-<h2><code>.felix</code></h2>
+<h2 id="felix"><code>.felix</code></h2>
 <p>A single file for the same tree - a standard ZIP archive (PNG/JPEG stored, YAML deflated), so <code>unzip</code> and Python's <code>zipfile</code> can open it. <code>felix pack</code> / <code>felix unpack</code> convert between the two; <code>fx.make(output="x.felix")</code> writes it directly (via a <code>.part</code> file, so a crash never leaves a half-written dataset).</p>
-<h2><code>annotations/IMG1.yml</code></h2>
+<h2 id="annotations-img1-yml"><code>annotations/IMG1.yml</code></h2>
 <pre><code>image: IMG1.png
 width: 640
 height: 640
@@ -34,7 +35,7 @@ objects:
     class_id: 0
     class_set: animals
     bbox: [316, 163, 62, 62]   # x, y, width, height in pixels, top-left origin</code></pre>
-<h2><code>metadata.yml</code></h2>
+<h2 id="metadata-yml"><code>metadata.yml</code></h2>
 <pre><code>felix_version: "0.1.0"
 created: "2026-11-10T08:17:58Z"
 pairs: 200
@@ -48,4 +49,5 @@ classes:
   - id: 0
     name: cat
     set: animals</code></pre>
-<p>The YAML is plain and valid; any YAML parser reads it. Felix itself uses a tiny built-in reader so it needs no dependencies.</p></main><script>document.querySelectorAll(".base").forEach(function(e){e.textContent=location.origin+location.pathname.replace(/[^\/]*$/,"").replace(/\/$/,"")})</script></body></html>
+<p>Splits are not stored for generated datasets: <code>ds.train</code> / <code>ds.val</code> / <code>ds.test</code> derive them deterministically from the seed (see the API page), and converted datasets keep their <code>split</code> field.</p>
+<p>The YAML is plain and valid; any YAML parser reads it. Felix itself uses a tiny built-in reader so it needs no dependencies.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

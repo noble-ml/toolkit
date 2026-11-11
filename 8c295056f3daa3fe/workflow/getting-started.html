@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · getting started</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="getting-started.html" class="on">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="routing.html">Routing</a><a href="model.html">Model</a><a href="analysis.html">Analysis</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="benchmark.html">Benchmark</a><a href="cli.html">CLI</a><a href="nbm.html">.nbm</a><a href="roadmap.html">Roadmap</a></nav><h1 id="getting-started">Getting started</h1>
+<h2 id="the-mental-model">The mental model</h2>
+<p>A <strong>Model</strong> is a list of named <strong>Stages</strong>. A stage is a sequence of <strong>operations</strong> (layers or blocks).</p>
+<pre><code>import workflow as wf
+
+model = wf.Model(
+    wf.Stage("p1", wf.Conv2D(3, 32, 3, stride=2, padding=1), wf.SiLU()),
+    wf.Stage("p2", wf.Conv2D(32, 64, 3, stride=2, padding=1), wf.SiLU()),
+)</code></pre>
+<ol><li>Every stage has a unique name (letters, digits, <code>_</code>; <code>input</code> is reserved for the model input).</li><li>The first stage receives the model input; every later stage receives the <strong>previous stage's output</strong>.</li><li>Operations inside a stage run in order.</li><li>A stage publishes its final output under its name. Later stages can read it by name (<a href="routing.html">Routing</a>).</li><li>Everything is validated when the <code>Model</code> is created, before any data or training.</li></ol>
+<h2 id="shapes">Shapes</h2>
+<p>Shapes are <code>(channels, height, width)</code> without the batch. Workflow propagates them for you:</p>
+<pre><code>model.summary()                 # table of every operation's output shape and parameters
+model.shapes()                  # {"p1": (32, 320, 320), "p2": (64, 160, 160)}
+model.shapes(input=(3, 416, 416))</code></pre>
+<p><code>wf.Model(..., input=(3, 640, 640))</code> sets the shape used for validation. Without it, the channels are taken from the first convolution and the size defaults to 640×640. The model itself runs on any size.</p>
+<h2 id="running">Running</h2>
+<pre><code>import torch
+y = model(torch.randn(1, 3, 640, 640))       # output of the last stage
+feats = model.features(x)                     # {"p1": ..., "p2": ...} every named tensor</code></pre>
+<p>If the last stage publishes several named outputs, <code>model(x)</code> returns a dict of them.</p>
+<h2 id="parameters-you-don-t-manage">Parameters you don't manage</h2>
+<ul><li><strong>Bias</strong> is automatic: a <code>Conv2D</code> directly followed by <code>BatchNorm2D</code> has none; otherwise it has one.</li><li><strong>Parameter counts</strong> (trainable / non-trainable, per operation) come from <code>summary()</code>.</li><li><strong>Memory</strong>: intermediate tensors are freed as soon as nothing needs them.</li></ul>
+<h2 id="device">Device</h2>
+<pre><code>model.device("auto")   # CUDA, then Apple MPS, then CPU
+model.device("cuda")   # or "cuda:1", "mps", "cpu"; a clear error if unavailable
+model.device()         # the current torch.device</code></pre>
+<h2 id="save-and-load">Save and load</h2>
+<pre><code>model.save("noble.nbm")
+model = wf.load("noble.nbm")            # rebuilds the architecture from the file
+model.load("noble.nbm")                 # loads weights into an identical architecture</code></pre>
+<p>Runnable version of all of this: <code>examples/phase1.py</code>.</p>
+<h2 id="where-next">Where next</h2>
+<ul><li>Build a detector and train it: <a href="demo.html">Demo</a>, <a href="detection.html">Detection</a>, <a href="training.html">Training</a>.</li><li>Inspect it: <code>model.summary()</code> and <code>model.export_graph(...)</code> (<a href="analysis.html">Analysis</a>).</li><li>Wire necks and heads by name: <a href="routing.html">Routing</a> and <a href="blocks.html">Blocks</a>.</li></ul></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

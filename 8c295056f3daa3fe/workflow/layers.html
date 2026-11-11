@@ -1,0 +1,39 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · layers</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="getting-started.html">Getting started</a><a href="layers.html" class="on">Layers</a><a href="blocks.html">Blocks</a><a href="routing.html">Routing</a><a href="model.html">Model</a><a href="analysis.html">Analysis</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="benchmark.html">Benchmark</a><a href="cli.html">CLI</a><a href="nbm.html">.nbm</a><a href="roadmap.html">Roadmap</a></nav><h1 id="layers">Layers</h1>
+<p>All layers live at <code>wf.&lt;Name&gt;</code>. Shapes are <code>(C, H, W)</code>; "in" is the tensor the layer receives. Invalid arguments raise <code>WorkflowError</code> at construction; a bad input shape raises <code>ShapeError</code> naming the stage and operation.</p>
+<p>Integer arguments marked *pair* also accept <code>(h, w)</code> tuples.</p>
+<h2 id="conv2d">Conv2D</h2>
+<pre><code>wf.Conv2D(in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1)</code></pre>
+<table><thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Requirement</th></tr></thead><tbody><tr><td><code>in_channels</code></td><td>int</td><td>required</td><td>≥ 1. Must equal the channels of the tensor it receives.</td></tr><tr><td><code>out_channels</code></td><td>int</td><td>required</td><td>≥ 1</td></tr><tr><td><code>kernel_size</code></td><td>int or pair</td><td>required</td><td>each ≥ 1</td></tr><tr><td><code>stride</code></td><td>int or pair</td><td>1</td><td>each ≥ 1</td></tr><tr><td><code>padding</code></td><td>int or pair</td><td>0</td><td>each ≥ 0</td></tr><tr><td><code>dilation</code></td><td>int or pair</td><td>1</td><td>each ≥ 1</td></tr></tbody></table>
+<p>Output: <code>(out_channels, ⌊(H + 2·pad − dil·(k−1) − 1) / stride⌋ + 1, …)</code> (same for W). Errors: wrong input channels; kernel does not fit the input. <code>groups</code> and <code>bias</code> are not exposed: groups is always 1 and bias is automatic (none when the next operation in the same sequence is <code>BatchNorm2D</code>).</p>
+<h2 id="batchnorm2d">BatchNorm2D</h2>
+<pre><code>wf.BatchNorm2D(channels)</code></pre>
+<table><thead><tr><th>Parameter</th><th>Type</th><th>Requirement</th></tr></thead><tbody><tr><td><code>channels</code></td><td>int</td><td>≥ 1; must equal the input's channels</td></tr></tbody></table>
+<p>Output shape = input shape. Uses eps 1e-3 and momentum 0.03. Its running statistics count as non-trainable parameters.</p>
+<h2 id="activations">Activations</h2>
+<p><code>wf.ReLU()</code>, <code>wf.SiLU()</code>, <code>wf.Sigmoid()</code>: no arguments. <code>wf.LeakyReLU(slope=0.1)</code>: <code>slope</code> is the gradient for negative inputs. All accept any shape and keep it.</p>
+<h2 id="maxpool2d-avgpool2d">MaxPool2D / AvgPool2D</h2>
+<pre><code>wf.MaxPool2D(kernel_size, stride=None, padding=0)
+wf.AvgPool2D(kernel_size, stride=None, padding=0)</code></pre>
+<table><thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Requirement</th></tr></thead><tbody><tr><td><code>kernel_size</code></td><td>int or pair</td><td>required</td><td>each ≥ 1</td></tr><tr><td><code>stride</code></td><td>int or pair</td><td><code>kernel_size</code></td><td>each ≥ 1</td></tr><tr><td><code>padding</code></td><td>int or pair</td><td>0</td><td>each ≥ 0 and at most half of <code>kernel_size</code></td></tr></tbody></table>
+<p>Output: channels unchanged; H and W follow the same window formula as <code>Conv2D</code>. Error: window does not fit the input.</p>
+<h2 id="upsample">Upsample</h2>
+<pre><code>wf.Upsample(scale_factor=2)</code></pre>
+<p><code>scale_factor</code>: integer ≥ 1. Nearest-neighbour. Output: <code>(C, H·scale, W·scale)</code>.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

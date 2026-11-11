@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · blocks</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html" class="on">Blocks</a><a href="routing.html">Routing</a><a href="model.html">Model</a><a href="analysis.html">Analysis</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="benchmark.html">Benchmark</a><a href="cli.html">CLI</a><a href="nbm.html">.nbm</a><a href="roadmap.html">Roadmap</a></nav><h1 id="blocks">Blocks</h1>
+<p>Blocks are operations built from layers. They go anywhere a layer goes.</p>
+<h2 id="implemented">Implemented</h2>
+<h3 id="residual">Residual</h3>
+<pre><code>wf.Residual(*ops, shortcut=None)</code></pre>
+<p><code>output = branch(x) + shortcut(x)</code>, where <code>x</code> is the block's <strong>own input</strong> (never an earlier stage).</p>
+<table><thead><tr><th>Parameter</th><th>Requirement</th></tr></thead><tbody><tr><td><code>*ops</code></td><td>one or more layers/blocks forming the branch (no operations that use named inputs/outputs)</td></tr><tr><td><code>shortcut</code></td><td>optional op or list of ops (e.g. <code>wf.Conv2D(c_in, c_out, 1, stride=2)</code>) to project the input. Default: identity</td></tr></tbody></table>
+<p>The branch output and the shortcut must have the <strong>same shape</strong>, or construction fails with the two shapes and how to fix it. Output = that shape.</p>
+<h3 id="bottleneck">Bottleneck</h3>
+<pre><code>wf.Bottleneck(channels, expansion=0.5, shortcut=True)</code></pre>
+<p>1×1 Conv-BN-SiLU down to <code>channels × expansion</code>, then 3×3 Conv-BN-SiLU back up, added to the input.</p>
+<table><thead><tr><th>Parameter</th><th>Requirement</th></tr></thead><tbody><tr><td><code>channels</code></td><td>int ≥ 1; must equal the input's channels</td></tr><tr><td><code>expansion</code></td><td>0 &lt; value ≤ 1 (hidden width = <code>channels × expansion</code>, at least 1)</td></tr><tr><td><code>shortcut</code></td><td>bool; <code>False</code> returns the branch only</td></tr></tbody></table>
+<p>Returns one tensor with the input's shape.</p>
+<h3 id="csp">CSP</h3>
+<pre><code>wf.CSP(channels, out_channels=None, n=1, expansion=0.5, shortcut=True)</code></pre>
+<p>Cross-stage-partial block: a 1×1 conv splits the input into two paths; one runs <code>n</code> Bottlenecks; the paths are concatenated and fused by a 1×1 conv.</p>
+<table><thead><tr><th>Parameter</th><th>Requirement</th></tr></thead><tbody><tr><td><code>channels</code></td><td>int ≥ 1; must equal the input's channels</td></tr><tr><td><code>out_channels</code></td><td>int ≥ 1; default <code>channels</code></td></tr><tr><td><code>n</code></td><td>int ≥ 1, number of Bottlenecks</td></tr><tr><td><code>expansion</code></td><td>0 &lt; value ≤ 1; hidden width = <code>out_channels × expansion</code></td></tr><tr><td><code>shortcut</code></td><td>bool, residual connection inside the Bottlenecks</td></tr></tbody></table>
+<p>Output: <code>(out_channels, H, W)</code>.</p>
+<h3 id="sppf">SPPF</h3>
+<pre><code>wf.SPPF(channels, out_channels=None, kernel_size=5)</code></pre>
+<p>Fast spatial pyramid pooling: 1×1 conv to <code>channels // 2</code>, three chained max-pools (stride 1) concatenated with the input, 1×1 conv to <code>out_channels</code>.</p>
+<table><thead><tr><th>Parameter</th><th>Requirement</th></tr></thead><tbody><tr><td><code>channels</code></td><td>int ≥ 1; must equal the input's channels</td></tr><tr><td><code>out_channels</code></td><td>int ≥ 1; default <code>channels</code></td></tr><tr><td><code>kernel_size</code></td><td>odd int ≥ 3</td></tr></tbody></table>
+<p>Output: <code>(out_channels, H, W)</code>.</p>
+<h2 id="routing-blocks">Routing blocks</h2>
+<p>These read <strong>named</strong> tensors (<code>inputs=</code>), so they sit directly in a <code>Stage</code> (not inside Residual/CSP). See <a href="routing.html">Routing</a>.</p>
+<h3 id="add">Add</h3>
+<pre><code>wf.Add(inputs=("a", "b", ...))</code></pre>
+<p>Elementwise sum. At least 2 distinct names; all inputs must have <strong>identical</strong> shapes. Output: that shape.</p>
+<h3 id="concat">Concat</h3>
+<pre><code>wf.Concat(inputs=("a", "b", ...))</code></pre>
+<p>Concatenates along channels. At least 2 distinct names; heights and widths must match, channels may differ. Output: <code>(sum of channels, H, W)</code>.</p>
+<h3 id="fpn">FPN</h3>
+<pre><code>wf.FPN(inputs=("p3", "p4", "p5"), channels=128, outputs=("n3", "n4", "n5"))</code></pre>
+<p>Top-down feature pyramid. Each input gets a 1×1 Conv-BN-SiLU to <code>channels</code>; starting at the coarsest level, the merged map is upsampled (nearest) and added to the next finer level; each level then gets a 3×3 Conv-BN-SiLU.</p>
+<table><thead><tr><th>Parameter</th><th>Requirement</th></tr></thead><tbody><tr><td><code>inputs</code></td><td>≥ 2 distinct names, ordered <strong>largest feature map first</strong>; each smaller than the one before</td></tr><tr><td><code>channels</code></td><td>int ≥ 1 (all outputs have this many channels)</td></tr><tr><td><code>outputs</code></td><td><strong>required</strong>: one distinct name per input, same order. There is no default naming</td></tr></tbody></table>
+<p>Input channels may all differ; weights are created from the inferred channels when the <code>Model</code> is built. Outputs keep their input's resolution. Must be the last operation of its stage.</p>
+<h3 id="pan">PAN</h3>
+<pre><code>wf.PAN(inputs=("n3", "n4", "n5"), channels=128, outputs=("m3", "m4", "m5"))</code></pre>
+<p>Bottom-up path aggregation, meant for FPN outputs. Inputs with a different channel count are projected with a 1×1 Conv-BN-SiLU. From the finest level, each level is downsampled with a stride-2 3×3 Conv-BN-SiLU, added to the next level, and refined with a 3×3 Conv-BN-SiLU.</p>
+<table><thead><tr><th>Parameter</th><th>Requirement</th></tr></thead><tbody><tr><td><code>inputs</code></td><td>≥ 2 distinct names, largest first; <strong>each exactly half the previous size, rounded up</strong></td></tr><tr><td><code>channels</code></td><td>int ≥ 1</td></tr><tr><td><code>outputs</code></td><td><strong>required</strong>, one name per input</td></tr></tbody></table>
+<p>A mismatch (e.g. 80×80 followed by 20×20) fails when the model is built, naming both inputs.</p>
+<h2 id="detection-head">Detection head</h2>
+<h3 id="bboxhead">BBoxHead</h3>
+<pre><code>wf.BBoxHead(inputs=("m3", "m4", "m5"), classes=3, outputs=("d3", "d4", "d5"), channels=None)</code></pre>
+<p>Anchor-free bounding-box head. It must be the <strong>last operation of the last stage</strong> for <code>train</code>, <code>predict</code> and <code>benchmark(dataset)</code> to find it. Design and tensor format: <a href="detection.html">Detection</a>.</p>
+<table><thead><tr><th>Parameter</th><th>Requirement</th></tr></thead><tbody><tr><td><code>inputs</code></td><td>≥ 1 distinct names of feature maps (usually PAN or FPN outputs), any order</td></tr><tr><td><code>classes</code></td><td>int ≥ 1, part of the architecture; must equal the dataset's class count when training</td></tr><tr><td><code>outputs</code></td><td><strong>required</strong>, one distinct name per input</td></tr><tr><td><code>channels</code></td><td>optional int ≥ 1: width of the head's convs (default: each input level's own channels)</td></tr></tbody></table>
+<p>Output: per level a raw map <code>(4 + 1 + classes, H, W)</code>.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

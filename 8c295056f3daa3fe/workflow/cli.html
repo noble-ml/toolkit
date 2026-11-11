@@ -1,0 +1,43 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · cli</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="routing.html">Routing</a><a href="model.html">Model</a><a href="analysis.html">Analysis</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="benchmark.html">Benchmark</a><a href="cli.html" class="on">CLI</a><a href="nbm.html">.nbm</a><a href="roadmap.html">Roadmap</a></nav><h1 id="cli">CLI</h1>
+<p><code>workflow</code> (or <code>python -m workflow</code>). Same minimal noir look as Felix; colour off with <code>NO_COLOR</code>.</p>
+<pre><code>workflow info FILE.nbm            summary of a saved model (classes, training progress, shapes, FLOPs)
+workflow devices                  cpu / cuda / mps, and what "auto" picks
+workflow export FILE.nbm [...]    convert to TorchScript (.pt) or ONNX (.onnx)
+workflow script FILE.nbm [...]    generate an inference script (image, folder, video, webcam)
+workflow benchmark FILE.nbm [...] architecture speed, or accuracy with --dataset
+workflow --version</code></pre>
+<h2 id="export">export</h2>
+<pre><code>workflow export noble.nbm                       # → noble.pt   (TorchScript)
+workflow export noble.nbm --format onnx         # → noble.onnx
+workflow export noble.nbm -o out/model.onnx --size 640 --dynamic</code></pre>
+<table><thead><tr><th>Option</th><th>Meaning</th></tr></thead><tbody><tr><td><code>-o, --output</code></td><td>output path; the extension (<code>.pt</code> / <code>.onnx</code>) picks the format</td></tr><tr><td><code>--format pt|onnx</code></td><td>format when <code>-o</code> is not given (default <code>pt</code>)</td></tr><tr><td><code>--size N</code> or <code>H W</code></td><td>input size to trace with (default: the model's own)</td></tr><tr><td><code>--device</code></td><td>device to trace on (default <code>cpu</code>)</td></tr><tr><td><code>--dynamic</code></td><td>ONNX: variable height/width (batch is always dynamic)</td></tr><tr><td><code>--opset</code></td><td>ONNX opset (default 17)</td></tr><tr><td><code>--overwrite</code></td><td>replace an existing output</td></tr></tbody></table>
+<p><code>.pt</code> is a self-contained TorchScript file: load it with <code>torch.jit.load</code> without Workflow installed. Inputs are named <code>images</code>; outputs use the model's output names.</p>
+<h2 id="script">script</h2>
+<p>Writes a ready-to-run Python inference script for a model, based on a preset:</p>
+<pre><code>workflow script noble.nbm --preset image        # → infer_image.py
+workflow script noble.nbm --preset webcam -o cam.py</code></pre>
+<table><thead><tr><th>Preset</th><th>What the script does</th><th>Run it</th></tr></thead><tbody><tr><td><code>image</code></td><td>one image → annotated <code>prediction.png</code>, prints every detection</td><td><code>python infer_image.py photo.jpg</code></td></tr><tr><td><code>folder</code></td><td>every image in a folder → annotated copies + <code>detections.json</code></td><td><code>python infer_folder.py photos/</code></td></tr><tr><td><code>video</code></td><td>a video file → live preview, optional <code>--save out.mp4</code></td><td><code>python infer_video.py clip.mp4</code></td></tr><tr><td><code>webcam</code></td><td>live detection from a camera (<code>--mirror</code> for selfie view)</td><td><code>python infer_webcam.py</code> (or a camera index)</td></tr></tbody></table>
+<p>Without <code>--preset</code>, an interactive terminal asks which one. All scripts take <code>--conf</code>, <code>--iou</code>, <code>--imgsz</code> and <code>--device</code> (default <code>auto</code>) and refer to the model by its absolute path. <code>video</code> and <code>webcam</code> need OpenCV (<code>pip install opencv-python</code>, or the <code>workflow[video]</code> extra); press <code>q</code> to quit the preview. The scripts are plain Python meant to be edited.</p>
+<h2 id="benchmark">benchmark</h2>
+<pre><code>workflow benchmark noble.nbm                                         # architecture: params, FLOPs, memory, latency, FPS
+workflow benchmark noble.nbm --dataset data.felix --split test       # accuracy: mAP, P/R/F1, per-class AP
+workflow benchmark noble.nbm --dataset data.felix --save eval.json --confusion confusion.png</code></pre>
+<p>Options: <code>--split train|val|test</code>, <code>--imgsz</code>, <code>--batch-size</code>, <code>--device</code>, <code>--save</code> (<code>.json</code>/<code>.csv</code>), <code>--confusion</code> (PNG). Evaluation needs the <code>felix</code> package. See <a href="benchmark.html">Benchmarking</a>.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

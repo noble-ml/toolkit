@@ -1,0 +1,45 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · detection</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="routing.html">Routing</a><a href="model.html">Model</a><a href="analysis.html">Analysis</a><a href="detection.html" class="on">Detection</a><a href="training.html">Training</a><a href="benchmark.html">Benchmark</a><a href="cli.html">CLI</a><a href="nbm.html">.nbm</a><a href="roadmap.html">Roadmap</a></nav><h1 id="detection">Detection</h1>
+<p>Workflow's first task is <strong>bounding-box object detection</strong>: boxes, classes and confidences. (Segmentation, pose and classification are not part of this version.)</p>
+<h2 id="the-head-bboxhead">The head: <code>BBoxHead</code></h2>
+<pre><code>wf.Stage("head", wf.BBoxHead(inputs=("m3", "m4", "m5"), classes=3, outputs=("d3", "d4", "d5")))</code></pre>
+<p>The head is <strong>anchor-free</strong>. For every input level it applies two 3×3 Conv-BN-SiLU layers and a 1×1 conv. Each level produces one raw map of shape <code>(N, 4 + 1 + classes, H, W)</code>:</p>
+<table><thead><tr><th>Channels</th><th>Meaning</th></tr></thead><tbody><tr><td>0-3</td><td>distances <strong>left, top, right, bottom</strong> from the cell centre to the box edges, in units of the level's stride (softplus is applied when decoding, so they are positive)</td></tr><tr><td>4</td><td>confidence (objectness) <strong>logit</strong></td></tr><tr><td>5…</td><td>one <strong>logit per class</strong></td></tr></tbody></table>
+<p><code>model(x)</code> returns these raw maps as a dict keyed by the names in <code>outputs</code>. The head's design decisions:</p>
+<ul><li>Each level's stride is <strong>derived from the image and map sizes</strong> at decode time, so any input size that the architecture accepts works; nothing is hard-coded to 640.</li><li><code>classes</code> is explicit in the architecture; training checks it against the dataset and explains a mismatch.</li><li><code>outputs</code> is explicit, like every multi-output operation: one name per input level.</li><li>Levels can be fed in any order; their order is the order of <code>inputs</code>.</li></ul>
+<h2 id="decoding-and-nms-inference-only">Decoding and NMS (inference only)</h2>
+<p>NMS is post-processing, not a network block. <code>model.predict</code> does, per image:</p>
+<ol><li><strong>Decode</strong> every cell to a box: centre ± (softplus distances × stride).</li><li><strong>Score</strong> = sigmoid(confidence) × sigmoid(class logit); each cell keeps its best class.</li><li>Drop scores ≤ <code>conf</code>; keep the best 1000.</li><li><strong>Class-aware NMS</strong>: boxes of different classes never suppress each other; overlaps above <code>iou</code> are removed.</li><li>Keep at most <code>max_det</code> and map the boxes back to the original image (undoing the letterbox).</li></ol>
+<h2 id="model-predict"><code>model.predict</code></h2>
+<pre><code>results = model.predict("test.png")            # also: PIL image, RGB numpy array, torch tensor, or a list of them
+results = model.predict(photo, conf=0.25, iou=0.45, imgsz=640, max_det=300)
+
+results.show()                                  # open the annotated image
+results.save("prediction.png")                  # .png / .jpg
+print(results.xyxy)                             # (N, 4) pixel boxes x1, y1, x2, y2 in the original image
+print(results.classes)                          # ['square', 'circle', ...]
+print(results.confidences)                      # (N,) scores</code></pre>
+<table><thead><tr><th>Argument</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td><code>conf</code></td><td>0.25</td><td>minimum score</td></tr><tr><td><code>iou</code></td><td>0.45</td><td>NMS overlap threshold</td></tr><tr><td><code>imgsz</code></td><td>the model's input size</td><td>letterbox size (int or <code>(H, W)</code>); must fit the architecture (checked with a clear error)</td></tr><tr><td><code>max_det</code></td><td>300</td><td>maximum detections per image</td></tr><tr><td><code>device</code></td><td>auto</td><td>if you never called <code>model.device(...)</code>, predict uses the best available device</td></tr><tr><td><code>half</code></td><td>CUDA only</td><td>fp16 autocast on CUDA</td></tr></tbody></table>
+<p>Images are <strong>letterboxed</strong> (resized keeping the aspect ratio, padded grey), so any image size works. A list input is processed in batches of 16 and returns a list of results. An RGB array is expected: OpenCV frames are BGR, so convert them with <code>cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)</code>.</p>
+<h3 id="results"><code>Results</code></h3>
+<table><thead><tr><th>Member</th><th>Type</th></tr></thead><tbody><tr><td><code>xyxy</code>, <code>xywh</code></td><td>float tensors <code>(N, 4)</code></td></tr><tr><td><code>confidences</code></td><td>float tensor <code>(N,)</code></td></tr><tr><td><code>class_ids</code></td><td>long tensor <code>(N,)</code></td></tr><tr><td><code>classes</code></td><td>list of class names (the ids as text if the model has no names)</td></tr><tr><td><code>len(results)</code>, iteration</td><td>iterate dicts with <code>xyxy</code>, <code>confidence</code>, <code>class_id</code>, <code>class</code></td></tr><tr><td><code>to_dict()</code>, <code>plot()</code>, <code>show()</code>, <code>save(path)</code></td><td>list of dicts, annotated PIL image, viewer, file</td></tr></tbody></table>
+<p>Class names come from the dataset used for training and are stored in the <code>.nbm</code>.</p>
+<h2 id="training-targets-and-loss-what-train-optimises">Training targets and loss (what <code>train</code> optimises)</h2>
+<ul><li><strong>Assignment</strong> (FCOS-style, by object size): a pyramid level handles objects up to 8 × its stride (and above the previous level's range), so small objects train the fine maps and large objects the coarse ones. Cells inside the box and within 1.5 strides of its centre are positives; every object always gets at least its centre cell; where objects overlap the smaller one wins.</li><li><strong>Loss</strong> = 5 × (1 − GIoU) on positive cells + BCE confidence (positives 1, all other cells 0) + BCE class, normalised by the number of positives.</li></ul></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>
