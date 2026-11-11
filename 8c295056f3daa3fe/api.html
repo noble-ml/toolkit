@@ -1,0 +1,49 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>felix · api</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:46rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;margin-bottom:2.5rem;font-size:.9rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg);margin-right:1rem}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+p,li{color:var(--fg)}code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+</style></head><body><main><nav><b>felix</b><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="api.html" class="on">API</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1>API reference</h1>
+<p><code>import felix as fx</code></p>
+<h2>Classes</h2>
+<h3><code>fx.class_set(name)</code></h3>
+<p>Context manager. Shapes created inside become classes of the set <code>name</code>. Re-using a name adds to the same set. Class names must be unique across the whole project.</p>
+<h3><code>fx.toolkit</code> shapes</h3>
+<p>All return a shape; all accept <code>position=(x, y)</code> (default placement), <code>name=</code> (override the inferred class name) and, except <code>image</code>, <code>color=</code> (hex, CSS name or RGB tuple).</p>
+<table><thead><tr><th>Function</th><th>Parameters</th></tr></thead><tbody><tr><td><code>circle</code></td><td><code>radius</code></td></tr><tr><td><code>rectangle</code></td><td><code>width</code>, <code>height</code></td></tr><tr><td><code>polygon</code></td><td><code>vertices=[(x, y), ...]</code> (≥ 3)</td></tr><tr><td><code>image</code></td><td><code>source</code> path, optional <code>width</code> / <code>height</code> (keeps aspect if only one). Use PNGs with transparency for tight boxes. Relative paths resolve against the working directory, then the calling script's folder.</td></tr></tbody></table>
+<h2>Steps</h2>
+<h3><code>fx.step(size=(640, 640), name=None)</code></h3>
+<p>Context manager; see <a href="getting-started.html">Getting started</a>. Several steps may be defined; <code>make</code> splits <code>pairs</code> evenly between them. Steps cannot be nested.</p>
+<h3><code>fx.canvas.background(color=None, image=None)</code></h3>
+<p><code>color</code> is a colour (or random node). <code>image</code> is a file, or a folder (one image picked at random per sample); it is cover-fitted to the canvas. Default is white.</p>
+<h3><code>fx.paint(target, position=None)</code> → handle</h3>
+<p><code>target</code> can be a random class node, a class variable, a class name string, <code>None</code> (no-op), or a plain shape that is *not* a class (drawn but never annotated). <code>position</code> is the object's centre in pixels (value or random node). Default: the shape's <code>position</code>, else canvas centre.</p>
+<h3><code>fx.toolkit.transformation(handle, hue=None, brightness=None, rotation=None, scale=None, opacity=None)</code></h3>
+<ul><li><code>hue</code>: degrees added to the hue (-180..180 covers everything)</li><li><code>brightness</code>: multiplier (1 = unchanged)</li><li><code>rotation</code>: degrees, counter-clockwise (the sprite grows so nothing is clipped)</li><li><code>scale</code>: multiplier, &gt; 0</li><li><code>opacity</code>: multiplier 0-1</li></ul>
+<p>Repeated calls accumulate (hue/rotation add; the rest multiply). Any parameter may be a random node. Ignored once <code>fx.gen()</code> has annotated the object.</p>
+<h3><code>fx.gen()</code></h3>
+<p>Annotate all not-yet-annotated objects painted so far. See <a href="getting-started.html">Getting started</a>.</p>
+<h2>Random (<code>fx.random</code>)</h2>
+<table><thead><tr><th>Function</th><th>Produces</th></tr></thead><tbody><tr><td><code>uniform(lo, hi)</code> / <code>value</code></td><td>float; <code>lo</code>/<code>hi</code> may be tuples (per component)</td></tr><tr><td><code>integer(lo, hi)</code></td><td>int, inclusive</td></tr><tr><td><code>choice(*options)</code></td><td>one option (options may be random nodes)</td></tr><tr><td><code>position(margin=0)</code></td><td>random <code>(x, y)</code> on the canvas</td></tr><tr><td><code>color()</code></td><td>random <code>#rrggbb</code></td></tr><tr><td><code>class_set(*names)</code></td><td>a class set (optionally only among <code>names</code>)</td></tr><tr><td><code>class_(from_=None)</code> / <code>cls</code></td><td>a class from a set node, a set name, or any class if <code>None</code></td></tr></tbody></table>
+<p>All take <code>threshold=</code> (0-1, default 1). <code>class</code> is a Python keyword, hence <code>class_</code>.</p>
+<h2>Output</h2>
+<h3><code>fx.make(pairs, output, seed=None, overwrite=False, quiet=False)</code></h3>
+<p>Writes <code>pairs</code> images + annotations. <code>output</code> ending in <code>.felix</code> writes a compiled file, otherwise a folder. Refuses to overwrite an existing dataset unless <code>overwrite=True</code>. Prints a live progress panel (disable with <code>quiet=True</code>). Returns <code>{"pairs", "seed", "boxes", "output"}</code>.</p>
+<h3><code>fx.load(path)</code> → <code>Dataset</code></h3>
+<p>Read a folder or <code>.felix</code>: <code>len(ds)</code>, <code>ds.metadata</code>, <code>ds.stems</code>, <code>ds.annotation(stem)</code>, <code>ds.image(stem)</code> (PIL image), <code>ds.image_bytes(stem)</code>, iteration yields <code>(stem, annotation)</code>. Use as a context manager or call <code>ds.close()</code>.</p>
+<h3><code>fx.reset()</code></h3>
+<p>Clear all classes and steps (tests, notebooks).</p>
+<h2>Errors</h2>
+<p>All user-facing problems raise <code>fx.FelixError</code>.</p></main><script>document.querySelectorAll(".base").forEach(function(e){e.textContent=location.origin+location.pathname.replace(/[^\/]*$/,"").replace(/\/$/,"")})</script></body></html>

@@ -1,0 +1,41 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>felix · overview</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:46rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;margin-bottom:2.5rem;font-size:.9rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg);margin-right:1rem}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+p,li{color:var(--fg)}code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+</style></head><body><main><nav><b>felix</b><a href="index.html" class="on">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="api.html">API</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1>Felix</h1>
+<p>A lightweight dataset pipeline generator for object detection. Describe classes and a generation step in a few lines of Python; Felix renders images, tight bounding boxes and metadata. Pure Python + Pillow + rich. Works on Linux, macOS and Windows (Python 3.8+).</p>
+<pre><code>import felix as fx
+
+with fx.class_set("animals"):
+    cat = fx.toolkit.circle(radius=30)
+    dog = fx.toolkit.rectangle(width=50, height=40)
+
+with fx.step(size=(640, 640)):
+    fx.canvas.background("#eeeeee")
+    obj = fx.paint(fx.random.class_(), position=fx.random.position(margin=40))
+    fx.toolkit.transformation(obj, rotation=fx.random.uniform(0, 360))
+    fx.gen()
+
+fx.make(pairs=10_000, output="./dataset")        # folder
+# fx.make(pairs=10_000, output="./dataset.felix")  # one compiled file</code></pre>
+<p>Try the full example: <a href="examples/animals.py">animals.py</a> (<code>python examples/animals.py</code> or <code>felix run examples/animals.py</code>).</p>
+<h2>Install</h2>
+<p>See <a href="install.html">Install</a>. Short version:</p>
+<pre><code>pip install Pillow rich
+pip install --no-deps --no-index --find-links <span class="base">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/simple/felix/ felix</code></pre>
+<p>(<code>--no-index</code> stops pip from fetching the unrelated public <code>felix</code> from PyPI.)</p>
+<h2>Docs</h2>
+<ul><li><a href="getting-started.html">Getting started</a> - the mental model, step by step</li><li><a href="api.html">API reference</a> - every function and parameter</li><li><a href="cli.html">CLI</a> - <code>felix run | pack | unpack | info | convert coco</code></li><li><a href="formats.html">Dataset formats</a> - folder layout, <code>.felix</code>, annotation schema</li><li><a href="install.html">Install</a> - installing the package</li></ul></main><script>document.querySelectorAll(".base").forEach(function(e){e.textContent=location.origin+location.pathname.replace(/[^\/]*$/,"").replace(/\/$/,"")})</script></body></html>
