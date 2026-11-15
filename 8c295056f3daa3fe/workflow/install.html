@@ -24,7 +24,7 @@ pip install --no-deps --no-index --find-links <span class="base" data-up="1">htt
 <p>Why the flags:</p>
 <ul><li><strong><code>--no-index</code></strong>: pip must not search PyPI. *Different, public* packages called <code>felix</code> and <code>workflow</code> live there and would be installed instead. Never use <code>--extra-index-url</code> for these.</li><li><strong><code>--no-deps</code></strong> and the separate <code>pip install torch Pillow rich</code>: with <code>--no-index</code>, pip can't fetch dependencies from this page, so install them first the normal way.</li></ul>
 <h2 id="colab-notebooks">Colab / notebooks</h2>
-<pre><code>!pip install <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/files/felix-0.2.0-py3-none-any.whl <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/files/workflow-0.1.0-py3-none-any.whl</code></pre>
+<pre><code>!pip install <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/files/felix-0.3.0-py3-none-any.whl <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/files/workflow-0.1.0-py3-none-any.whl</code></pre>
 <p>Direct wheel URLs need no extra flags: pip fetches the dependencies from PyPI itself, and there is no name clash. Colab already has PyTorch with CUDA, so <code>model.device("auto")</code> picks the GPU.</p>
 <h2 id="optional-extras">Optional extras</h2>
 <ul><li>Video and webcam inference scripts: <code>pip install opencv-python</code>.</li><li>ONNX export works out of the box on current PyTorch; on a PyTorch without the legacy exporter, add <code>pip install onnx onnxscript</code>.</li></ul>

@@ -22,9 +22,21 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 felix pack FOLDER [-o OUT.felix]      folder -&gt; single compressed .felix
 felix unpack FILE.felix [-o FOLDER]   .felix -&gt; folder
 felix info PATH                       summary + per-class box counts (folder or .felix)
+felix partition SRC (--parts N | ...)  split a dataset into several smaller datasets
 felix convert coco SRC -o OUT         Roboflow/COCO -&gt; Felix
 felix --version</code></pre>
 <p>All writing commands refuse to overwrite existing output unless <code>--overwrite</code> is given.</p>
+<h2 id="partitioning-a-dataset">Partitioning a dataset</h2>
+<p><code>felix partition</code> splits one dataset into several smaller ones. Every piece is a complete dataset (images, annotations, <code>metadata.yml</code>), so it can be loaded, packed, inspected or partitioned again on its own.</p>
+<pre><code>felix partition data.felix --parts 4                     # 4 equal pieces: part1 … part4
+felix partition data.felix --ratio 80,10,10 --names train,val,test
+felix partition ./data --size 1000                       # pieces of at most 1000 pairs
+felix partition data.felix --by-split                    # one piece per train / val / test split</code></pre>
+<p>Choose exactly one way to split:</p>
+<table><thead><tr><th>Option</th><th>Pieces</th></tr></thead><tbody><tr><td><code>--parts N</code></td><td>N equal pieces (sizes differ by at most one pair)</td></tr><tr><td><code>--ratio A,B,...</code></td><td>proportional pieces; any positive numbers, they need not sum to 100</td></tr><tr><td><code>--size K</code></td><td>as many pieces of K pairs as needed; the last one may be smaller</td></tr><tr><td><code>--by-split</code></td><td>one piece per non-empty split (<code>train</code>, <code>val</code>, <code>test</code>), using the dataset's own splits</td></tr></tbody></table>
+<p>Other options:</p>
+<table><thead><tr><th>Option</th><th>Meaning</th></tr></thead><tbody><tr><td><code>-o, --output DIR</code></td><td>folder that receives the pieces (default <code>&lt;source&gt;_parts</code>)</td></tr><tr><td><code>--names A,B,...</code></td><td>piece names, one per piece (default <code>part1</code>, <code>part2</code>, ...)</td></tr><tr><td><code>--shuffle</code>, <code>--seed S</code></td><td>shuffle before splitting, reproducibly (default: keep the dataset's order)</td></tr><tr><td><code>--pack</code> / <code>--folders</code></td><td>write <code>.felix</code> files or folders (default: the same kind as the source)</td></tr><tr><td><code>--overwrite</code></td><td>replace existing pieces</td></tr></tbody></table>
+<p>Every pair lands in exactly one piece. Files keep their names (<code>IMG42.png</code> stays <code>IMG42.png</code>), and each piece's <code>metadata.yml</code> records where it came from (<code>partition: {source, name, index, of}</code>). With <code>--ratio</code>, leftover pairs go to the pieces with the largest remainders.</p>
 <h2 id="converting-a-roboflow-coco-export">Converting a Roboflow COCO export</h2>
 <p>Export from Roboflow in <strong>COCO</strong> format, then:</p>
 <pre><code>felix convert coco ./my-export       -o ./my-felix-dataset

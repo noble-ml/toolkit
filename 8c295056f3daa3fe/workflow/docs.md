@@ -87,7 +87,7 @@ Why the flags:
 ### Colab / notebooks
 
 ```
-!pip install BASE_URL/files/felix-0.2.0-py3-none-any.whl BASE_URL/files/workflow-0.1.0-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.3.0-py3-none-any.whl BASE_URL/files/workflow-0.1.0-py3-none-any.whl
 ```
 
 Direct wheel URLs need no extra flags: pip fetches the dependencies from PyPI itself, and there is no name clash.

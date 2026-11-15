@@ -53,7 +53,7 @@ pip install --no-deps --no-index --find-links BASE_URL/simple/felix/ felix
 ### Colab / notebooks (direct link)
 
 ```
-!pip install BASE_URL/files/felix-0.2.0-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.3.0-py3-none-any.whl
 ```
 
 A direct wheel URL needs no extra flags: pip fetches Pillow and rich from PyPI itself, and
@@ -76,7 +76,7 @@ Why the extra flags:
 - **`--no-deps`** and the separate `pip install Pillow rich`: with `--no-index` pip can't fetch
   dependencies from this page, so install them first the normal way.
 
-Upgrade to the newest version by adding `--upgrade`; pin one with `felix==0.2.0`.
+Upgrade to the newest version by adding `--upgrade`; pin one with `felix==0.3.0`.
 
 Try the example pipeline: download [animals.py](examples/animals.py) and
 [bicycle.png](examples/assets/bicycle.png) (keep it in an `assets/` folder next to the script), then
@@ -240,6 +240,10 @@ read API (`len`, `stems`, `annotation`, `image`, iteration, `classes`, `metadata
 - Otherwise the dataset is split **deterministically 80/10/10**: shuffled with the dataset's `seed`, so the
   same file always gives the same splits. Datasets with fewer than 10 pairs are not split (all `train`).
 
+#### `fx.partition(source, output=None, parts=None, ratio=None, size=None, by_split=False, names=None, shuffle=False, seed=0, pack=None, overwrite=False, quiet=False)` → list of paths
+Split a dataset into several complete datasets; the Python form of [`felix partition`](#cli). Give exactly one of
+`parts=N`, `ratio=(80, 10, 10)`, `size=K` or `by_split=True`. `source` is a path or a loaded `Dataset`.
+
 #### `fx.reset()`
 Clear all classes and steps (tests, notebooks).
 
@@ -258,11 +262,47 @@ felix run SCRIPT [args...]            run a pipeline script
 felix pack FOLDER [-o OUT.felix]      folder -> single compressed .felix
 felix unpack FILE.felix [-o FOLDER]   .felix -> folder
 felix info PATH                       summary + per-class box counts (folder or .felix)
+felix partition SRC (--parts N | ...)  split a dataset into several smaller datasets
 felix convert coco SRC -o OUT         Roboflow/COCO -> Felix
 felix --version
 ```
 
 All writing commands refuse to overwrite existing output unless `--overwrite` is given.
+
+### Partitioning a dataset
+
+`felix partition` splits one dataset into several smaller ones. Every piece is a complete dataset (images,
+annotations, `metadata.yml`), so it can be loaded, packed, inspected or partitioned again on its own.
+
+```
+felix partition data.felix --parts 4                     # 4 equal pieces: part1 … part4
+felix partition data.felix --ratio 80,10,10 --names train,val,test
+felix partition ./data --size 1000                       # pieces of at most 1000 pairs
+felix partition data.felix --by-split                    # one piece per train / val / test split
+```
+
+Choose exactly one way to split:
+
+| Option | Pieces |
+|---|---|
+| `--parts N` | N equal pieces (sizes differ by at most one pair) |
+| `--ratio A,B,...` | proportional pieces; any positive numbers, they need not sum to 100 |
+| `--size K` | as many pieces of K pairs as needed; the last one may be smaller |
+| `--by-split` | one piece per non-empty split (`train`, `val`, `test`), using the dataset's own splits |
+
+Other options:
+
+| Option | Meaning |
+|---|---|
+| `-o, --output DIR` | folder that receives the pieces (default `<source>_parts`) |
+| `--names A,B,...` | piece names, one per piece (default `part1`, `part2`, ...) |
+| `--shuffle`, `--seed S` | shuffle before splitting, reproducibly (default: keep the dataset's order) |
+| `--pack` / `--folders` | write `.felix` files or folders (default: the same kind as the source) |
+| `--overwrite` | replace existing pieces |
+
+Every pair lands in exactly one piece. Files keep their names (`IMG42.png` stays `IMG42.png`), and each piece's
+`metadata.yml` records where it came from (`partition: {source, name, index, of}`). With `--ratio`, leftover pairs
+go to the pieces with the largest remainders.
 
 ### Converting a Roboflow COCO export
 
