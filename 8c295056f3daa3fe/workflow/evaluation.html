@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · evaluation</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="cookbook.html">Cookbook</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="composition.html">Composition</a><a href="model.html">Model</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="evaluation.html" class="on">Evaluation</a><a href="quantization.html">Quantisation</a><a href="devices.html">Devices</a><a href="errors.html">Errors</a><a href="cli.html">CLI</a><a href="changes.html">Changes</a></nav><h1 id="evaluation">Evaluation</h1>
+<pre><code>wf.eval(model)                     # architecture: no data needed
+wf.eval(model, dataset=val)        # plus accuracy</code></pre>
+<p>Without a dataset:</p>
+<table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody><tr><td><code>parameters</code>, <code>trainable</code></td><td>values in the model</td></tr><tr><td><code>size_mb</code></td><td>file size of the weights at the model's precision (fp32 4 bytes, fp16 2, int8 1 per value)</td></tr><tr><td><code>flops</code>, <code>macs</code></td><td>per image at the evaluated size</td></tr><tr><td><code>latency_ms</code>, <code>fps</code></td><td>batch 1, forward pass only, measured on the device after warm-up</td></tr><tr><td><code>throughput</code></td><td>images/s at <code>batch_size</code> (default 8)</td></tr><tr><td><code>memory_mb</code></td><td>fp32 weights plus one image's activations</td></tr></tbody></table>
+<p>With a dataset (a Felix split), additionally:</p>
+<table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody><tr><td><code>map50</code>, <code>map50_95</code></td><td>COCO-style AP (101-point) at IoU 0.5, and averaged over IoU 0.5-0.95</td></tr><tr><td><code>precision_score</code>, <code>recall</code>, <code>f1</code></td><td>at the confidence that maximises mean F1 (<code>conf_threshold</code>)</td></tr><tr><td><code>per_class</code></td><td><code>{name: {"ap50", "ap50_95", "instances"}}</code></td></tr><tr><td><code>confusion_matrix</code></td><td>(classes + 1)² counts at confidence 0.25 / IoU 0.45; the last row and column are background</td></tr></tbody></table>
+<p><code>wf.eval</code> prints a table and returns an <code>Evaluation</code> (<code>.show()</code>, <code>.to_dict()</code>, <code>.save("eval.json")</code> or <code>.csv</code>). Options: <code>device</code>, <code>img_size</code>, <code>batch_size</code>, <code>confidence</code> (0.001 for a complete AP curve), <code>iou</code> (0.6), <code>show</code>.</p>
+<p>It works before and after training, and never changes weights, BatchNorm statistics or the training state. Passing a whole Felix dataset evaluates its validation split.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

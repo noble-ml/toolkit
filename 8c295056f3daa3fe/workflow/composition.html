@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · composition</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="cookbook.html">Cookbook</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="composition.html" class="on">Composition</a><a href="model.html">Model</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="evaluation.html">Evaluation</a><a href="quantization.html">Quantisation</a><a href="devices.html">Devices</a><a href="errors.html">Errors</a><a href="cli.html">CLI</a><a href="changes.html">Changes</a></nav><h1 id="composition">Composition</h1>
+<table><thead><tr><th>Function</th><th>Meaning</th></tr></thead><tbody><tr><td><code>wf.stack(*layers, input=None)</code></td><td>layers in order. The outermost stack is the model; <code>input</code> is <code>(C, H, W)</code>, default <code>(3, 640, 640)</code></td></tr><tr><td><code>wf.Residual(*layers, shortcut=None)</code></td><td><code>layers(x) + x</code>. With <code>shortcut=</code> (a layer or list) the input is projected first. Both paths must end with the same shape</td></tr><tr><td><code>wf.parallel(*branches, merge="concat")</code></td><td>every branch receives the same input; results are concatenated along channels or summed (<code>merge="add"</code>)</td></tr><tr><td><code>wf.feature("name")</code></td><td>registers the current tensor under a name and passes it on unchanged. After a pyramid, give one name per map: <code>wf.feature(("n3", "n4", "n5"))</code></td></tr><tr><td><code>wf.concat("a", "b", ...)</code></td><td>concatenates named features along channels (same height and width)</td></tr><tr><td><code>wf.add("a", "b", ...)</code></td><td>sums named features (identical shapes)</td></tr><tr><td><code>wf.FPN("p3", "p4", "p5", channels=None)</code></td><td>top-down pyramid over named features (any order, any channel counts); returns the pyramid, largest map first</td></tr><tr><td><code>wf.PAN(*names, channels=None)</code></td><td>bottom-up aggregation over the incoming pyramid (or named features)</td></tr><tr><td><code>wf.head(classes=80, channels=None)</code></td><td>detection head over the pyramid (or a single map); must be the last layer</td></tr></tbody></table>
+<h2 id="features">Features</h2>
+<p>Features are how later layers reach back to earlier tensors. They are looked up by name only; Workflow never picks a tensor by position or channel count. A missing name lists the names that exist (with a "did you mean" when one is close), and a duplicate name is an error.</p>
+<pre><code>wf.stack(
+    ..., wf.feature("p3"),
+    ..., wf.feature("p4"),
+    wf.Conv2D(64, kernel_size=1), wf.Upsample(2), wf.feature("up"),
+    wf.concat("p3", "up"),
+)</code></pre>
+<h2 id="fpn-and-pan">FPN and PAN</h2>
+<p><code>wf.FPN</code> reads the named maps, orders them from the largest to the smallest, projects each to <code>channels</code> with a 1×1 Conv-BN-SiLU, adds every coarser map (resized, nearest) into the next finer one, and refines each level with a 3×3 Conv-BN-SiLU. Different sizes and channel counts are handled for you. <code>channels</code> defaults to the smallest input channel count.</p>
+<p><code>wf.PAN</code> then goes back up: the finest map is reduced by a stride-2 3×3 Conv-BN-SiLU, resized if needed, added to the next map, and refined.</p>
+<p>Both return a <strong>pyramid</strong>: the next layer must accept several maps (<code>wf.PAN</code>, <code>wf.head</code>, or <code>wf.feature((...))</code> to name them). A single-tensor layer after a pyramid raises an error that says so.</p>
+<h2 id="residual-shapes">Residual shapes</h2>
+<p><code>wf.Residual</code> checks that its layers keep the input's shape. If they don't, the error shows both shapes and the projection to add:</p>
+<pre><code>layer 2 (Residual): Residual cannot add its two paths.
+  why: the layers output (16, 15, 15) but the shortcut carries (8, 30, 30); addition needs identical shapes.
+  fix: keep the shape inside the block (same channels, stride 1, padding k//2), or project the input with
+       shortcut=wf.Conv2D(16, kernel_size=1, stride=2).</code></pre></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

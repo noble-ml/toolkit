@@ -1,0 +1,347 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · cookbook</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="cookbook.html" class="on">Cookbook</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="composition.html">Composition</a><a href="model.html">Model</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="evaluation.html">Evaluation</a><a href="quantization.html">Quantisation</a><a href="devices.html">Devices</a><a href="errors.html">Errors</a><a href="cli.html">CLI</a><a href="changes.html">Changes</a></nav><h1 id="cookbook">Cookbook</h1>
+<p>Every tool, explained like you're three, then *why* you'd reach for it and where it goes. Every example writes out all the main arguments (with their defaults) so you can see every knob, even the ones you'd usually leave alone.</p>
+<p>Felix makes the pictures. Workflow is the brain that learns to find things in them.</p>
+<p>How to read an entry:</p>
+<ul><li><strong>Toddler words</strong>: what it is.</li><li><strong>Why you'd use it</strong>: the reasoning, and where it usually sits.</li><li><strong>Example</strong>: every main argument shown.</li><li><strong>Watch out</strong>: the one mistake people make (when there is one).</li></ul>
+<p>---</p>
+<h2 id="part-1-felix-making-the-pictures">Part 1 · Felix: making the pictures</h2>
+<h3 id="fx-class-set"><code>fx.class_set</code></h3>
+<p><strong>Toddler words:</strong> a toy box with a name. Every toy you make inside it is a *kind of thing* the brain must learn to find.</p>
+<p><strong>Why you'd use it:</strong> the brain can only learn classes you define, and the boxes let you group them (animals, vehicles) so you can later pick "any animal" or "any vehicle" at random. The class name comes from the variable name, so <code>cat = ...</code> makes a class called <code>cat</code>.</p>
+<pre><code>with fx.class_set("animals"):
+    cat = fx.toolkit.circle(radius=30)              # class "cat"
+    dog = fx.toolkit.rectangle(width=50, height=40) # class "dog"</code></pre>
+<p><strong>Watch out:</strong> shapes made *outside* a class set are not classes: they get drawn but never labelled. That's how you make decoys on purpose.</p>
+<h3 id="fx-toolkit-circle-rectangle-polygon"><code>fx.toolkit.circle</code>, <code>rectangle</code>, <code>polygon</code></h3>
+<p><strong>Toddler words:</strong> a ball, a box, and a "connect the dots" shape.</p>
+<p><strong>Why you'd use it:</strong> quick synthetic objects for testing a pipeline, or for detecting simple things (signs, markers, parts). <code>position</code> is only a default spot; usually <code>fx.paint</code> decides where it goes.</p>
+<pre><code>ball = fx.toolkit.circle(radius=20, position=None, color="red", name=None)
+box  = fx.toolkit.rectangle(width=40, height=30, position=None, color="#1f77b4", name=None)
+tent = fx.toolkit.polygon(vertices=[(0, 40), (20, 0), (40, 40)], position=None, color="green", name=None)</code></pre>
+<p><strong>Watch out:</strong> without <code>color</code>, each class gets its own colour from a palette. Set it when the colour matters.</p>
+<h3 id="fx-stack"><code>fx.stack</code></h3>
+<p><strong>Toddler words:</strong> glue several shapes together into one toy. A big circle, two triangle ears and two dot eyes make one cat, and the brain learns "cat", not "circle" and "triangle".</p>
+<p><strong>Why you'd use it:</strong> real objects are made of parts. A stack lets you build a recognisable object from simple shapes and still get <strong>one</strong> class and <strong>one</strong> box around the whole thing. The class name is the variable name. Each part's <code>position</code> says where its centre goes, measured from the middle of the stack.</p>
+<pre><code>with fx.class_set("animals"):
+    cat = fx.stack(
+        fx.toolkit.polygon(vertices=[(0, 14), (7, 0), (14, 14)], position=(-13, -22), color=None),  # left ear
+        fx.toolkit.polygon(vertices=[(0, 14), (7, 0), (14, 14)], position=(13, -22), color=None),   # right ear
+        fx.toolkit.circle(radius=22, position=(0, 0), color=None),                                  # head
+        fx.toolkit.circle(radius=3, position=(-8, -4), color="black"),                               # eyes
+        fx.toolkit.circle(radius=3, position=(8, -4), color="black"),
+        position=None, color="#e8a33d", name=None,
+    )</code></pre>
+<p><strong>Watch out:</strong> parts are drawn in order, so put the things that go *on top* (eyes, nose) last. Parts without a colour use the stack's colour; parts with one keep it. Spinning or growing the stack moves all its parts together.</p>
+<h3 id="fx-toolkit-image"><code>fx.toolkit.image</code></h3>
+<p><strong>Toddler words:</strong> use a real sticker as a toy. The see-through parts of the sticker don't count as the toy.</p>
+<p><strong>Why you'd use it:</strong> cut-out photos of real objects (PNG with transparency) look far more like real life than plain shapes. The box is fitted to the visible pixels only, so transparent padding never makes boxes too big.</p>
+<pre><code>bike = fx.toolkit.image(source="assets/bicycle.png", width=80, height=None, position=None, name=None)</code></pre>
+<p><strong>Watch out:</strong> give only <code>width</code> *or* <code>height</code> to keep the proportions; give both to stretch. JPEG stickers need Pillow, and have no see-through parts.</p>
+<h3 id="fx-step"><code>fx.step</code></h3>
+<p><strong>Toddler words:</strong> the recipe for one picture. Felix follows it again and again, rolling new dice each time.</p>
+<p><strong>Why you'd use it:</strong> everything you write inside it (background, painting, changes) happens once per image. Make several steps (for example "busy street" and "empty street") and Felix shares the images between them.</p>
+<pre><code>with fx.step(size=(640, 640), name=None):
+    ...</code></pre>
+<h3 id="fx-canvas-background"><code>fx.canvas.background</code></h3>
+<p><strong>Toddler words:</strong> the paper you draw on: one colour, or a photo.</p>
+<p><strong>Why you'd use it:</strong> a plain colour is easy to learn; real photos (a folder of them, one picked per image) teach the brain to ignore clutter, which is what you want for real-world use.</p>
+<pre><code>fx.canvas.background(color="#eeeeee", image=None)
+fx.canvas.background(color=None, image="backgrounds/")    # a different photo each time, cropped to fit</code></pre>
+<h3 id="fx-random"><code>fx.random.*</code></h3>
+<p><strong>Toddler words:</strong> dice. Every picture rolls them again.</p>
+<p><strong>Why you'd use it:</strong> variety. A brain that only ever sees a cat in the middle, upright and red will fail on anything else. Randomness in position, size, angle and colour is what makes it robust.</p>
+<pre><code>fx.random.uniform(0.5, 2.0, threshold=1.0)    # any number between 0.5 and 2
+fx.random.integer(1, 6, threshold=1.0)        # a whole number, like a real die
+fx.random.choice("red", "blue", threshold=1.0)
+fx.random.position(margin=40, threshold=1.0)  # somewhere on the paper, at least 40 px from the edges
+fx.random.color(threshold=1.0)
+fx.random.class_set("animals", threshold=1.0) # pick a toy box (any box if no names)
+fx.random.class_(None, threshold=1.0)         # pick a toy (from any box, or from the box you pass)</code></pre>
+<p><strong>Watch out:</strong> <code>threshold=0.5</code> means "flip a coin first; if it says no, skip it". It's how you get a *varying number* of objects. Each dice call is its own die: the same variable used twice gives the same roll within one picture.</p>
+<h3 id="fx-paint"><code>fx.paint</code></h3>
+<p><strong>Toddler words:</strong> put a toy on the paper.</p>
+<p><strong>Why you'd use it:</strong> this is what actually places objects. Pass a class, a random class, or a plain shape.</p>
+<pre><code>obj = fx.paint(fx.random.class_(None, threshold=1.0), position=fx.random.position(margin=40))</code></pre>
+<h3 id="fx-toolkit-transformation"><code>fx.toolkit.transformation</code></h3>
+<p><strong>Toddler words:</strong> change how the toy looks: spin it, grow it, recolour it, brighten it, fade it.</p>
+<p><strong>Why you'd use it:</strong> the same as dice: real objects come at all angles, sizes and lighting. Calls add up (two rotations add, two scales multiply).</p>
+<pre><code>fx.toolkit.transformation(obj, hue=fx.random.uniform(-20, 20), brightness=fx.random.uniform(0.8, 1.2),
+                          rotation=fx.random.uniform(0, 360), scale=fx.random.uniform(0.7, 1.5), opacity=1.0)</code></pre>
+<p><strong>Watch out:</strong> <code>hue</code> is in degrees around the colour wheel, <code>rotation</code> is in degrees counter-clockwise, and the others are multipliers (1 = unchanged).</p>
+<h3 id="fx-gen"><code>fx.gen</code></h3>
+<p><strong>Toddler words:</strong> take a photo of where every toy is (the answer key). Toys painted *after* the photo are in the picture but not in the answers.</p>
+<p><strong>Why you'd use it:</strong> it writes the boxes. Painting things after it adds <strong>decoys</strong> the brain must learn to ignore, which cuts false alarms.</p>
+<pre><code>fx.gen()
+fx.paint(fx.toolkit.circle(radius=8, color="gray"), position=fx.random.position(margin=0))   # a decoy</code></pre>
+<h3 id="fx-make"><code>fx.make</code></h3>
+<p><strong>Toddler words:</strong> do the recipe lots of times and put everything in a folder (or one <code>.felix</code> file).</p>
+<p><strong>Why you'd use it:</strong> this is the moment the dataset is created. Same <code>seed</code> = the exact same dataset, which is handy for comparing models fairly.</p>
+<pre><code>fx.make(pairs=1000, output="shapes.felix", seed=7, overwrite=False, quiet=False)</code></pre>
+<h3 id="fx-load-and-its-splits"><code>fx.load</code> and its splits</h3>
+<p><strong>Toddler words:</strong> open the dataset. It already has three piles: <code>train</code> (learn from these), <code>val</code> (check while learning), and <code>test</code> (the final exam nobody peeks at).</p>
+<p><strong>Why you'd use it:</strong> you pass these piles straight to Workflow. Generated datasets are split 80/10/10, the same way every time. Converted datasets keep their own splits.</p>
+<pre><code>data = fx.load("shapes.felix")
+data.train, data.val, data.test          # the piles
+data.classes                             # ['circle', 'square', 'triangle']
+data.image(data.stems[0]).save("look.png")</code></pre>
+<h3 id="fx-partition-felix-partition"><code>fx.partition</code> / <code>felix partition</code></h3>
+<p><strong>Toddler words:</strong> cut one big pile into smaller piles, each a complete dataset.</p>
+<p><strong>Why you'd use it:</strong> share work between machines, make a small dataset for quick tests, or split a converted dataset your own way.</p>
+<pre><code>fx.partition("shapes.felix", output=None, parts=4, ratio=None, size=None, by_split=False,
+             names=None, shuffle=False, seed=0, pack=None, overwrite=False)
+fx.partition("shapes.felix", ratio=(80, 10, 10), names=["train", "val", "test"], shuffle=True, seed=1)</code></pre>
+<pre><code>felix partition shapes.felix --size 100</code></pre>
+<p><strong>Watch out:</strong> choose exactly one of <code>parts</code>, <code>ratio</code>, <code>size</code> or <code>by_split</code>.</p>
+<h3 id="other-felix-commands">Other Felix commands</h3>
+<p><strong>Toddler words:</strong> look inside a box, zip it up, unzip it, and turn someone else's box into yours.</p>
+<p><strong>Why you'd use it:</strong> checking what you made, sending one file instead of thousands, and training on real Roboflow datasets.</p>
+<pre><code>felix info shapes.felix
+felix pack ./dataset -o dataset.felix
+felix unpack dataset.felix -o ./dataset
+felix convert coco ./roboflow-export -o data.felix</code></pre>
+<p>---</p>
+<h2 id="part-2-workflow-the-brain-s-building-blocks">Part 2 · Workflow: the brain's building blocks</h2>
+<h3 id="wf-stack"><code>wf.stack</code></h3>
+<p><strong>Toddler words:</strong> line up blocks. The picture goes through them one after another, like a slide with bumps.</p>
+<p><strong>Why you'd use it:</strong> it's the model itself (the outermost one) and also any group of layers you want to treat as one. <code>input</code> is the picture size the model is built and checked for.</p>
+<pre><code>model = wf.stack(
+    wf.Conv2D(16, kernel_size=3, stride=1, padding=1),
+    wf.ReLU(),
+    input=(3, 640, 640),
+)</code></pre>
+<p><strong>Watch out:</strong> you never say how many channels go *in* to a layer. Workflow works that out.</p>
+<h3 id="padding-used-by-every-layer-with-a-window"><code>padding</code> (used by every layer with a window)</h3>
+<p><strong>Toddler words:</strong> a cushion of empty pixels around the picture so the edges don't get squished away.</p>
+<p><strong>Why you'd use it:</strong> without padding, every 3×3 window shrinks the picture by 2 pixels. <code>padding = kernel_size // 2</code> (1 for size 3, 2 for size 5) keeps it the same size at stride 1.</p>
+<pre><code>padding=1                     # 1 pixel on every side
+padding=(1, 2)                # 1 top and bottom, 2 left and right
+padding=(0, 1, 0, 1)          # top, bottom, left, right</code></pre>
+<p><strong>Watch out:</strong> only numbers. <code>"same"</code> and <code>"valid"</code> are refused (the error tells you the number to use).</p>
+<h3 id="wf-conv2d"><code>wf.Conv2D</code></h3>
+<p><strong>Toddler words:</strong> little magnifying glasses that slide over the picture, each looking for one kind of pattern (an edge, a corner, a stripe). <code>filters=32</code> means 32 different glasses.</p>
+<p><strong>Why you'd use it:</strong> it's *the* building block. Early convs find edges; later ones find parts and whole objects. <code>stride=2</code> takes big steps, halving the picture; that's how a backbone goes from big-and-shallow to small-and-deep.</p>
+<pre><code>wf.Conv2D(32, kernel_size=3, stride=1, padding=1)    # same size, 32 channels
+wf.Conv2D(64, kernel_size=3, stride=2, padding=1)    # half size, 64 channels: a "downsampling" step</code></pre>
+<h3 id="wf-depthwiseconv2d"><code>wf.DepthwiseConv2D</code></h3>
+<p><strong>Toddler words:</strong> one magnifying glass per colour channel, and each one only looks at its own channel.</p>
+<p><strong>Why you'd use it:</strong> it's very cheap. Mobile-style models use it to look around spatially for almost no cost, then mix the channels with a pointwise conv.</p>
+<pre><code>wf.DepthwiseConv2D(kernel_size=3, stride=1, padding=1)    # keeps the channel count</code></pre>
+<h3 id="wf-pointwiseconv2d"><code>wf.PointwiseConv2D</code></h3>
+<p><strong>Toddler words:</strong> a 1×1 glass. It doesn't look around; it just mixes the channels at each spot.</p>
+<p><strong>Why you'd use it:</strong> changing the number of channels cheaply: squeezing before expensive work, or matching channels before an <code>add</code>.</p>
+<pre><code>wf.PointwiseConv2D(64)       # kernel 1, stride 1, padding 0 are fixed: that's what "pointwise" means</code></pre>
+<h3 id="wf-separableconv2d"><code>wf.SeparableConv2D</code></h3>
+<p><strong>Toddler words:</strong> depthwise, then pointwise: look around, then mix.</p>
+<p><strong>Why you'd use it:</strong> a drop-in for <code>Conv2D</code> that does nearly the same job for a fraction of the maths. Good for small or fast models.</p>
+<pre><code>wf.SeparableConv2D(64, kernel_size=3, stride=1, padding=1)</code></pre>
+<h3 id="wf-dilatedconv2d"><code>wf.DilatedConv2D</code></h3>
+<p><strong>Toddler words:</strong> a magnifying glass with gaps between its eyes, so it sees farther without costing more.</p>
+<p><strong>Why you'd use it:</strong> a bigger view (more context) without shrinking the picture or adding work. Useful late in a network or for big objects.</p>
+<pre><code>wf.DilatedConv2D(32, kernel_size=3, dilation=2, stride=1, padding=2)   # padding = dilation keeps the size for kernel 3</code></pre>
+<h3 id="wf-transposeconv2d"><code>wf.TransposeConv2D</code></h3>
+<p><strong>Toddler words:</strong> a magnifying glass that makes the picture *bigger* (it un-squishes), and learns how.</p>
+<p><strong>Why you'd use it:</strong> growing a small, smart map back to a bigger size, for example in a neck. Unlike <code>Upsample</code>, which just copies pixels, it *learns* how to fill in the new pixels.</p>
+<pre><code>wf.TransposeConv2D(32, kernel_size=2, stride=2, padding=0)   # exactly twice the height and width</code></pre>
+<p>Output size: <code>(size − 1) × stride − 2 × padding + kernel_size</code>. With <code>kernel_size=2, stride=2, padding=0</code> that is exactly double, which is why those are the defaults. <code>kernel_size=4, stride=2, padding=1</code> also doubles and blends neighbours more smoothly.</p>
+<p><strong>Watch out:</strong> it stays float in int8 models (Workflow warns you). Use <code>Upsample</code> + <code>Conv2D</code> if everything must be int8.</p>
+<h3 id="wf-batchnorm2d"><code>wf.BatchNorm2D</code></h3>
+<p><strong>Toddler words:</strong> keeps the numbers from getting too big or too small, so learning doesn't wobble.</p>
+<p><strong>Why you'd use it:</strong> almost always right after a convolution: <code>Conv2D → BatchNorm2D → activation</code>. Models train faster and more reliably with it. The conv before it automatically drops its bias, which the BatchNorm would cancel anyway.</p>
+<pre><code>wf.BatchNorm2D()         # channels are worked out for you</code></pre>
+<h3 id="wf-relu-wf-leakyrelu-wf-silu-wf-sigmoid"><code>wf.ReLU</code>, <code>wf.LeakyReLU</code>, <code>wf.SiLU</code>, <code>wf.Sigmoid</code></h3>
+<p><strong>Toddler words:</strong> mood filters. ReLU says "no sad numbers, make them zero". LeakyReLU says "a tiny bit of sad is okay". SiLU is a smooth ReLU. Sigmoid squishes everything between 0 and 1.</p>
+<p><strong>Why you'd use it:</strong> without them, stacking layers is no smarter than one layer. SiLU is the modern default for detectors; ReLU is the cheapest; Sigmoid is for gates and probabilities, not between layers.</p>
+<pre><code>wf.ReLU()
+wf.LeakyReLU(slope=0.1)
+wf.SiLU()
+wf.Sigmoid()</code></pre>
+<h3 id="wf-maxpool2d-wf-avgpool2d"><code>wf.MaxPool2D</code>, <code>wf.AvgPool2D</code></h3>
+<p><strong>Toddler words:</strong> shrink the picture. Max keeps the loudest pixel in each little square; Avg keeps the average.</p>
+<p><strong>Why you'd use it:</strong> a cheap way to halve the size with no weights to learn. Max is good at keeping "is the pattern anywhere here?"; Avg smooths things out.</p>
+<pre><code>wf.MaxPool2D(kernel_size=2, stride=None, padding=0)      # stride defaults to kernel_size: half the size
+wf.AvgPool2D(kernel_size=3, stride=1, padding=1)         # same size, just smoothed</code></pre>
+<h3 id="wf-upsample"><code>wf.Upsample</code></h3>
+<p><strong>Toddler words:</strong> make the picture bigger by copying each pixel.</p>
+<p><strong>Why you'd use it:</strong> cheap resizing with nothing to learn, usually before joining a small map to a big one.</p>
+<pre><code>wf.Upsample(scale=2)</code></pre>
+<p>---</p>
+<h2 id="part-3-workflow-bigger-blocks">Part 3 · Workflow: bigger blocks</h2>
+<h3 id="wf-bottleneck"><code>wf.Bottleneck</code></h3>
+<p><strong>Toddler words:</strong> squeeze the picture thin (fewer channels), look around, puff it back up, then add the original back so nothing gets lost.</p>
+<p><strong>Why you'd use it:</strong> to make a network deeper without making it slow. The expensive 3×3 look-around happens on the thin version, and the added shortcut keeps learning stable in deep stacks.</p>
+<pre><code>wf.Bottleneck(filters=None, kernel_size=3, stride=1, reduction=2, shortcut=True)   # same shape out as in
+wf.Bottleneck(filters=128, kernel_size=3, stride=2, reduction=2, shortcut=True)    # wider and half size</code></pre>
+<p><strong>Watch out:</strong> when <code>filters</code> or <code>stride</code> change the shape, the shortcut gets a 1×1 projection automatically, so you never have to match the shapes yourself.</p>
+<h3 id="wf-csp"><code>wf.CSP</code></h3>
+<p><strong>Toddler words:</strong> split into two paths. One does hard work (bottlenecks), one takes it easy. Then glue them together.</p>
+<p><strong>Why you'd use it:</strong> most of the accuracy of a deep stack of bottlenecks at a lot less cost. It's the standard backbone block after each downsampling conv.</p>
+<pre><code>wf.CSP(filters=None, n=1, shortcut=True)      # n = how many bottlenecks on the busy path</code></pre>
+<h3 id="wf-spp-wf-sppf"><code>wf.SPP</code>, <code>wf.SPPF</code></h3>
+<p><strong>Toddler words:</strong> look at the picture through small, medium and big windows at the same time, then glue what you saw.</p>
+<p><strong>Why you'd use it:</strong> at the end of the backbone, so the brain sees both details and the big picture. SPPF gets the same result faster with three chained small pools, so prefer it.</p>
+<pre><code>wf.SPP(filters=None, kernels=(5, 9, 13))
+wf.SPPF(filters=None, kernel_size=5)</code></pre>
+<h3 id="wf-se"><code>wf.SE</code></h3>
+<p><strong>Toddler words:</strong> each channel asks "am I important for *this* picture?" and turns its own volume up or down.</p>
+<p><strong>Why you'd use it:</strong> a small, cheap accuracy boost, usually after a backbone block. It learns to pay more attention to the channels that matter for the image at hand.</p>
+<pre><code>wf.SE(reduction=16)       # how much the "am I important?" helper squeezes; 16 is the classic value</code></pre>
+<h3 id="wf-cbam"><code>wf.CBAM</code></h3>
+<p><strong>Toddler words:</strong> SE, plus "which *spots* in the picture matter?": a spotlight for channels and places.</p>
+<p><strong>Why you'd use it:</strong> like SE, but it also helps with *where*, which suits detection. Costs a bit more.</p>
+<pre><code>wf.CBAM(reduction=16, kernel_size=7)</code></pre>
+<h3 id="wf-focus"><code>wf.Focus</code></h3>
+<p><strong>Toddler words:</strong> cut the picture into 2×2 tiles and stack the tiles as channels: half the size, nothing thrown away.</p>
+<p><strong>Why you'd use it:</strong> as the very first layer, a fast way to shrink a big input without losing pixels.</p>
+<pre><code>wf.Focus(filters=32, kernel_size=3)</code></pre>
+<p><strong>Watch out:</strong> the input height and width must be even.</p>
+<p>---</p>
+<h2 id="part-4-workflow-wiring">Part 4 · Workflow: wiring</h2>
+<h3 id="wf-residual"><code>wf.Residual</code></h3>
+<p><strong>Toddler words:</strong> do some stuff, then add what you started with. "Remember where you came from."</p>
+<p><strong>Why you'd use it:</strong> to build your own residual block. It lets very deep models train, because the brain can learn "a small change to the input" instead of a whole new picture.</p>
+<pre><code>wf.Residual(wf.Conv2D(64, kernel_size=3, stride=1, padding=1), wf.SiLU(), shortcut=None)
+wf.Residual(wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+            shortcut=wf.Conv2D(128, kernel_size=1, stride=2, padding=0))      # shape changes → project the shortcut</code></pre>
+<p><strong>Watch out:</strong> both paths must end the same shape. If they don't, the error tells you the exact <code>shortcut=</code> to add.</p>
+<h3 id="wf-parallel"><code>wf.parallel</code></h3>
+<p><strong>Toddler words:</strong> give the same picture to several friends, then glue (or add up) their answers.</p>
+<p><strong>Why you'd use it:</strong> let the brain look at the same thing in different ways at once (small and big windows, for example), Inception-style.</p>
+<pre><code>wf.parallel(wf.Conv2D(16, kernel_size=1, stride=1, padding=0),
+            wf.Conv2D(16, kernel_size=3, stride=1, padding=1),
+            merge="concat")                                   # or merge="add" (then the outputs must match)</code></pre>
+<h3 id="wf-feature"><code>wf.feature</code></h3>
+<p><strong>Toddler words:</strong> stick a note with a name on the current picture so you can grab it later.</p>
+<p><strong>Why you'd use it:</strong> detectors need maps from several depths (big and detailed, small and smart). You name them in the backbone and use them in the neck.</p>
+<pre><code>wf.feature("p3")
+wf.feature(("n3", "n4", "n5"))        # after FPN/PAN: one name per map of the pyramid</code></pre>
+<h3 id="wf-concat-wf-add"><code>wf.concat</code>, <code>wf.add</code></h3>
+<p><strong>Toddler words:</strong> grab named notes and glue them side by side (concat) or add them up (add).</p>
+<p><strong>Why you'd use it:</strong> to hand-build skip connections or necks. Concat keeps both sets of channels (more information, more channels); add mixes them (same channels, cheaper).</p>
+<pre><code>wf.concat("p3", "up")      # needs the same height and width; channels add up
+wf.add("a", "b")           # needs identical shapes</code></pre>
+<h3 id="wf-fpn"><code>wf.FPN</code></h3>
+<p><strong>Toddler words:</strong> big pictures see small details; small pictures know *what* things are. FPN passes the "what" knowledge down into the big pictures.</p>
+<p><strong>Why you'd use it:</strong> so small objects (found on the big maps) are recognised as well as large ones. It takes your named maps in any order, any channel counts, and handles the resizing and channel matching itself.</p>
+<pre><code>wf.FPN("p3", "p4", "p5", channels=64)      # channels=None uses the smallest input's channel count</code></pre>
+<h3 id="wf-pan"><code>wf.PAN</code></h3>
+<p><strong>Toddler words:</strong> the other way round: it passes the sharp details back up to the small pictures.</p>
+<p><strong>Why you'd use it:</strong> right after FPN, so the maps that find big objects also get precise edges. FPN + PAN is the classic modern neck.</p>
+<pre><code>wf.PAN(channels=64)                        # works on the pyramid FPN just produced</code></pre>
+<h3 id="wf-head"><code>wf.head</code></h3>
+<p><strong>Toddler words:</strong> the mouth. For every spot it says "there's a cat here, this big, and I'm this sure".</p>
+<p><strong>Why you'd use it:</strong> it's what turns features into boxes. It must be the last layer, and <code>classes</code> must match your dataset (Workflow checks).</p>
+<pre><code>wf.head(classes=3, channels=None)          # channels=None: as wide as each incoming map</code></pre>
+<p>---</p>
+<h2 id="part-5-workflow-using-the-brain">Part 5 · Workflow: using the brain</h2>
+<h3 id="model-summary"><code>model.summary()</code></h3>
+<p><strong>Toddler words:</strong> "tell me about yourself": every layer, how big, and how much work it does.</p>
+<p><strong>Why you'd use it:</strong> before training, to check the shapes come out as you expect and the model isn't accidentally huge. It builds the model, so shape mistakes show up here, not halfway through training.</p>
+<pre><code>model.summary(input=None, show=True)       # input=(3, 416, 416) checks another size</code></pre>
+<h3 id="model-export-graph"><code>model.export_graph</code></h3>
+<p><strong>Toddler words:</strong> draw a picture of the brain.</p>
+<p><strong>Why you'd use it:</strong> to see your wiring (shortcuts, branches, which feature goes where) or to share it. SVG for documents, PNG for quick looks.</p>
+<pre><code>model.export_graph("brain.png", detail="layers", scale=2)     # detail="compact" for one row per layer</code></pre>
+<h3 id="model-device"><code>model.device</code></h3>
+<p><strong>Toddler words:</strong> pick which helper does the maths: the computer's own brain (<code>"cpu"</code>), a big NVIDIA graphics card (<code>"cuda"</code>), any graphics card (<code>"gpu"</code>), or a Mac's graphics chip (<code>"mps"</code>, still learning to walk).</p>
+<p><strong>Why you'd use it:</strong> GPUs are much faster for training. Usually you just pass <code>device=</code> to <code>train</code> or <code>predict</code> instead.</p>
+<pre><code>model.device("cuda")      # or "cpu", "gpu", "mps", "auto"
+model.device()            # which one am I on?</code></pre>
+<p><strong>Watch out:</strong> if you ask for a GPU that isn't there, you get an error saying why, never a silent switch to CPU.</p>
+<h3 id="model-train"><code>model.train</code></h3>
+<p><strong>Toddler words:</strong> look at lots of pictures and their answers, again and again, until you get good. Press Ctrl+C and it saves before stopping.</p>
+<p><strong>Why you'd use it:</strong> this is learning. The defaults (optimizer, learning-rate schedule, loss, augmentation, checkpoints) are sensible, so most of the time you only set the data and <code>epochs</code>.</p>
+<pre><code>model.train(data.train, validation=data.val, epochs=50, batch_size=16, lr=1e-3, device="auto",
+            img_size=None, optimizer="adamw", patience=30, save_every=5, output="runs/train",
+            quantization=None, augment=True, ema=True)</code></pre>
+<p><strong>Watch out:</strong> <code>epochs</code> means "train *until* epoch N". To continue a model that reached 50, ask for <code>epochs=80</code> to get 30 more; <code>epochs=30</code> would do nothing.</p>
+<h3 id="wf-eval"><code>wf.eval</code></h3>
+<p><strong>Toddler words:</strong> a report card. Without a test: "how big and how fast am I?". With a test: "how many do I get right?".</p>
+<p><strong>Why you'd use it:</strong> before training to compare architectures (size, speed); after training to measure accuracy on the test pile. It never changes the model.</p>
+<pre><code>wf.eval(model, dataset=None, device=None, img_size=None, batch_size=8, show=True)
+wf.eval(model, dataset=data.test)              # adds mAP50, mAP50-95, precision, recall</code></pre>
+<h3 id="wf-qat"><code>wf.QAT</code></h3>
+<p><strong>Toddler words:</strong> practise with smaller, rounder numbers while learning, so the brain still works after it's shrunk.</p>
+<p><strong>Why you'd use it:</strong> when you'll ship an int8 model (smaller, faster on small devices). Usually a short fine-tune *after* normal training: it starts from your trained weights.</p>
+<pre><code>model.train(data.train, validation=data.val, epochs=55, quantization=wf.QAT(precision="int8"))   # 5 epochs after 50</code></pre>
+<h3 id="model-quantize-workflow-quantize"><code>model.quantize</code> / <code>workflow quantize</code></h3>
+<p><strong>Toddler words:</strong> shrink a finished brain so it's small and fast. Show it some pictures first (calibration) so it learns how big the numbers get.</p>
+<p><strong>Why you'd use it:</strong> the quick way to int8 or fp16 without retraining. Try it first; use QAT if accuracy drops too much.</p>
+<pre><code>model.quantize("int8", calibration=data.val)     # "fp16" needs no calibration</code></pre>
+<pre><code>workflow quantize detector.nbm int8 --calibration shapes.felix</code></pre>
+<h3 id="model-save-wf-load-model-load"><code>model.save</code>, <code>wf.load</code>, <code>model.load</code></h3>
+<p><strong>Toddler words:</strong> put the brain in a box (<code>.nbm</code>) and take it out again later.</p>
+<p><strong>Why you'd use it:</strong> keep a trained model, share it, or continue training it. The box holds the layers, weights, class names and training progress.</p>
+<pre><code>model.save("detector.nbm")
+model = wf.load("detector.nbm")       # rebuilds everything from the box
+model.load("detector.nbm")            # fills a model you already built the same way</code></pre>
+<h3 id="model-export"><code>model.export</code></h3>
+<p><strong>Toddler words:</strong> pack the brain for other programs (ONNX), or make a smaller box.</p>
+<p><strong>Why you'd use it:</strong> ONNX runs in many runtimes (ONNX Runtime, mobile, servers); an int8 <code>.nbm</code> is the smallest Workflow file.</p>
+<pre><code>model.export(format="onnx", output="detector.onnx", precision="fp32", calibration=None, img_size=None)
+model.export(format="nbm", output="detector-int8.nbm", precision="int8", calibration=data.val)</code></pre>
+<h3 id="model-predict"><code>model.predict</code></h3>
+<p><strong>Toddler words:</strong> "what's in this picture?". It draws boxes and puts the pictures and a list of answers in <code>results/</code>.</p>
+<p><strong>Why you'd use it:</strong> to actually use the detector, on one image, many images, or video frames.</p>
+<pre><code>r = model.predict("photo.jpg", device=None, confidence=0.25, iou=0.45, img_size=None,
+                  output="results/", max_detections=300)
+r.classes, r.confidences, r.xyxy
+r.show()</code></pre>
+<p><strong>Watch out:</strong> raise <code>confidence</code> for fewer, surer boxes; lower <code>iou</code> if one object gets several boxes. <code>output=None</code> saves nothing, which is handy for video.</p>
+<h3 id="errors">Errors</h3>
+<p><strong>Toddler words:</strong> when something is wrong, Workflow tells you what broke, why, and how to fix it, like a kind teacher.</p>
+<p><strong>Why it matters:</strong> you fix it from the message instead of digging through code. The first line also names the layer.</p>
+<pre><code>layer 4 (Residual): Residual cannot add its two paths.
+  why: the layers output (16, 15, 15) but the shortcut carries (8, 30, 30); addition needs identical shapes.
+  fix: ... project the input with shortcut=wf.Conv2D(16, kernel_size=1, stride=2).</code></pre>
+<h3 id="workflow-commands">Workflow commands</h3>
+<p><strong>Toddler words:</strong> the same tools, typed in the terminal.</p>
+<p><strong>Why you'd use it:</strong> checking, converting and running models without writing Python.</p>
+<pre><code>workflow info detector.nbm
+workflow predict detector.nbm photo.jpg --confidence 0.25
+workflow eval detector.nbm --dataset shapes.felix --split test
+workflow quantize detector.nbm int8 --calibration shapes.felix
+workflow export detector.nbm --format onnx --precision fp32
+workflow script detector.nbm --preset webcam         # writes a ready-to-run camera program
+workflow devices</code></pre>
+<p>---</p>
+<h2 id="part-6-recipes-how-the-pieces-fit">Part 6 · Recipes: how the pieces fit</h2>
+<p><strong>A downsampling step</strong> (the most common pattern in a backbone):</p>
+<pre><code>def down(filters):
+    return [wf.Conv2D(filters, kernel_size=3, stride=2, padding=1), wf.BatchNorm2D(), wf.SiLU()]</code></pre>
+<p><strong>A small detector</strong>: backbone (down + CSP, naming three depths), SPPF, then FPN + PAN + head:</p>
+<pre><code>model = wf.stack(
+    *down(16), *down(32), wf.CSP(n=1),
+    *down(64), wf.CSP(n=2), wf.feature("p3"),          # 1/8 size: small objects
+    *down(128), wf.CSP(n=2), wf.feature("p4"),         # 1/16: medium
+    *down(256), wf.SPPF(kernel_size=5), wf.feature("p5"),   # 1/32: large
+    wf.FPN("p3", "p4", "p5", channels=64),
+    wf.PAN(channels=64),
+    wf.head(classes=3),
+    input=(3, 256, 256),
+)</code></pre>
+<p><strong>Train, then shrink for deployment:</strong></p>
+<pre><code>model.train(data.train, validation=data.val, epochs=50)
+wf.eval(model, dataset=data.test)
+model.train(data.train, validation=data.val, epochs=55, quantization=wf.QAT(precision="int8"))
+model.export(format="nbm", output="detector-int8.nbm", precision="int8")</code></pre>
+<p><strong>A cheaper backbone block</strong> (mobile-style): look around cheaply, mix, add back:</p>
+<pre><code>wf.Residual(wf.DepthwiseConv2D(kernel_size=3, stride=1, padding=1), wf.BatchNorm2D(), wf.SiLU(),
+            wf.PointwiseConv2D(64), wf.BatchNorm2D())</code></pre></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

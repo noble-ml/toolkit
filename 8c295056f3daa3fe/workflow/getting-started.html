@@ -16,37 +16,42 @@ table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflo
 th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
-</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="getting-started.html" class="on">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="routing.html">Routing</a><a href="model.html">Model</a><a href="analysis.html">Analysis</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="benchmark.html">Benchmark</a><a href="cli.html">CLI</a><a href="nbm.html">.nbm</a><a href="roadmap.html">Roadmap</a></nav><h1 id="getting-started">Getting started</h1>
-<h2 id="the-mental-model">The mental model</h2>
-<p>A <strong>Model</strong> is a list of named <strong>Stages</strong>. A stage is a sequence of <strong>operations</strong> (layers or blocks).</p>
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="cookbook.html">Cookbook</a><a href="getting-started.html" class="on">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="composition.html">Composition</a><a href="model.html">Model</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="evaluation.html">Evaluation</a><a href="quantization.html">Quantisation</a><a href="devices.html">Devices</a><a href="errors.html">Errors</a><a href="cli.html">CLI</a><a href="changes.html">Changes</a></nav><h1 id="getting-started">Getting started</h1>
+<p>A model is a <strong>stack</strong> of layers. Each layer receives the previous layer's output, so the only numbers you write are the ones you decide: filters, kernel sizes, strides, padding.</p>
 <pre><code>import workflow as wf
 
-model = wf.Model(
-    wf.Stage("p1", wf.Conv2D(3, 32, 3, stride=2, padding=1), wf.SiLU()),
-    wf.Stage("p2", wf.Conv2D(32, 64, 3, stride=2, padding=1), wf.SiLU()),
+model = wf.stack(
+    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.Bottleneck(),
+    input=(3, 640, 640),
+)
+model.summary()</code></pre>
+<ul><li><strong>Input channels are inferred.</strong> <code>wf.Conv2D(32, kernel_size=3)</code> works out how many channels it receives.</li><li><strong>Shapes are checked before anything runs.</strong> The first use of a model builds it for <code>input=</code> (default 3×640×640) and validates every layer.</li><li><strong>Padding is explicit.</strong> <code>padding=1</code> adds one pixel on each side; there is no <code>"same"</code>. For stride 1, <code>padding=kernel_size//2</code> keeps the size.</li><li><strong>Bias is automatic.</strong> A convolution right before <code>BatchNorm2D</code> has none; any other has one.</li></ul>
+<h2 id="a-detector">A detector</h2>
+<pre><code>def down(filters):
+    return [wf.Conv2D(filters, kernel_size=3, stride=2, padding=1), wf.BatchNorm2D(), wf.SiLU()]
+
+model = wf.stack(
+    *down(16), *down(32), wf.CSP(),
+    *down(64), wf.CSP(n=2), wf.feature("p3"),        # remember this map as "p3"
+    *down(128), wf.CSP(n=2), wf.feature("p4"),
+    *down(256), wf.SPPF(), wf.feature("p5"),
+    wf.FPN("p3", "p4", "p5", channels=64),           # fuse the named maps
+    wf.PAN(channels=64),
+    wf.head(classes=3),                              # boxes, confidence, classes
+    input=(3, 256, 256),
 )</code></pre>
-<ol><li>Every stage has a unique name (letters, digits, <code>_</code>; <code>input</code> is reserved for the model input).</li><li>The first stage receives the model input; every later stage receives the <strong>previous stage's output</strong>.</li><li>Operations inside a stage run in order.</li><li>A stage publishes its final output under its name. Later stages can read it by name (<a href="routing.html">Routing</a>).</li><li>Everything is validated when the <code>Model</code> is created, before any data or training.</li></ol>
-<h2 id="shapes">Shapes</h2>
-<p>Shapes are <code>(channels, height, width)</code> without the batch. Workflow propagates them for you:</p>
-<pre><code>model.summary()                 # table of every operation's output shape and parameters
-model.shapes()                  # {"p1": (32, 320, 320), "p2": (64, 160, 160)}
-model.shapes(input=(3, 416, 416))</code></pre>
-<p><code>wf.Model(..., input=(3, 640, 640))</code> sets the shape used for validation. Without it, the channels are taken from the first convolution and the size defaults to 640×640. The model itself runs on any size.</p>
-<h2 id="running">Running</h2>
-<pre><code>import torch
-y = model(torch.randn(1, 3, 640, 640))       # output of the last stage
-feats = model.features(x)                     # {"p1": ..., "p2": ...} every named tensor</code></pre>
-<p>If the last stage publishes several named outputs, <code>model(x)</code> returns a dict of them.</p>
-<h2 id="parameters-you-don-t-manage">Parameters you don't manage</h2>
-<ul><li><strong>Bias</strong> is automatic: a <code>Conv2D</code> directly followed by <code>BatchNorm2D</code> has none; otherwise it has one.</li><li><strong>Parameter counts</strong> (trainable / non-trainable, per operation) come from <code>summary()</code>.</li><li><strong>Memory</strong>: intermediate tensors are freed as soon as nothing needs them.</li></ul>
-<h2 id="device">Device</h2>
-<pre><code>model.device("auto")   # CUDA, then Apple MPS, then CPU
-model.device("cuda")   # or "cuda:1", "mps", "cpu"; a clear error if unavailable
-model.device()         # the current torch.device</code></pre>
-<h2 id="save-and-load">Save and load</h2>
-<pre><code>model.save("noble.nbm")
-model = wf.load("noble.nbm")            # rebuilds the architecture from the file
-model.load("noble.nbm")                 # loads weights into an identical architecture</code></pre>
-<p>Runnable version of all of this: <code>examples/phase1.py</code>.</p>
-<h2 id="where-next">Where next</h2>
-<ul><li>Build a detector and train it: <a href="demo.html">Demo</a>, <a href="detection.html">Detection</a>, <a href="training.html">Training</a>.</li><li>Inspect it: <code>model.summary()</code> and <code>model.export_graph(...)</code> (<a href="analysis.html">Analysis</a>).</li><li>Wire necks and heads by name: <a href="routing.html">Routing</a> and <a href="blocks.html">Blocks</a>.</li></ul></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>
+<h2 id="train-evaluate-use">Train, evaluate, use</h2>
+<pre><code>import felix as fx
+data = fx.load("shapes.felix")                       # Felix gives train / val / test splits
+
+model.train(data.train, validation=data.val, epochs=50)
+wf.eval(model, dataset=data.test)
+model.save("detector.nbm")
+
+model = wf.load("detector.nbm")
+results = model.predict("photo.jpg")                 # → results/photo.png and results/predictions.json
+print(results.xyxy, results.classes, results.confidences)</code></pre>
+<p>Next: <a href="layers.html">Layers</a>, <a href="blocks.html">Blocks</a> and <a href="composition.html">Composition</a> for building; <a href="training.html">Training</a>, <a href="evaluation.html">Evaluation</a> and <a href="quantization.html">Quantisation</a> for the rest. A full runnable example is the <a href="demo.html">Demo</a>.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

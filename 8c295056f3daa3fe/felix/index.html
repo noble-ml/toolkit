@@ -17,7 +17,7 @@ th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
 </style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html" class="on">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="api.html">API</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="felix">Felix</h1>
-<p>A lightweight dataset pipeline generator for object detection. Describe classes and a generation step in a few lines of Python; Felix renders images, tight bounding boxes and metadata. Pure Python + Pillow + rich. Works on Linux, macOS and Windows (Python 3.8+).</p>
+<p>A lightweight dataset pipeline generator for object detection. Describe classes and a generation step in a few lines of Python; Felix renders images, tight bounding boxes and metadata. Felix renders with its own NumPy backend (shapes, transforms, compositing, PNG) and needs only NumPy and rich; Pillow is optional, for JPEG files. Works on Linux, macOS and Windows (Python 3.8+).</p>
 <pre><code>import felix as fx
 
 with fx.class_set("animals"):
@@ -35,7 +35,7 @@ fx.make(pairs=10_000, output="./dataset")        # folder
 <p>Try the full example: <a href="examples/animals.py">animals.py</a> (<code>python examples/animals.py</code> or <code>felix run examples/animals.py</code>).</p>
 <h2 id="install">Install</h2>
 <p>See <a href="install.html">Install</a>. Short version:</p>
-<pre><code>pip install Pillow rich
+<pre><code>pip install numpy rich
 pip install --no-deps --no-index --find-links <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/simple/felix/ felix</code></pre>
 <p>(<code>--no-index</code> stops pip from fetching the unrelated public <code>felix</code> from PyPI.)</p>
 <h2 id="docs">Docs</h2>

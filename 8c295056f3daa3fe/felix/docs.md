@@ -14,7 +14,8 @@
 
 A lightweight dataset pipeline generator for object detection. Describe classes and a
 generation step in a few lines of Python; Felix renders images, tight bounding boxes and
-metadata. Pure Python + Pillow + rich. Works on Linux, macOS and Windows (Python 3.8+).
+metadata. Felix renders with its own NumPy backend (shapes, transforms, compositing, PNG) and needs only NumPy and
+rich; Pillow is optional, for JPEG files. Works on Linux, macOS and Windows (Python 3.8+).
 
 ```python
 import felix as fx
@@ -40,7 +41,7 @@ Try the full example: [animals.py](examples/animals.py) (`python examples/animal
 See [Install](#install). Short version:
 
 ```
-pip install Pillow rich
+pip install numpy rich
 pip install --no-deps --no-index --find-links BASE_URL/simple/felix/ felix
 ```
 
@@ -53,17 +54,17 @@ pip install --no-deps --no-index --find-links BASE_URL/simple/felix/ felix
 ### Colab / notebooks (direct link)
 
 ```
-!pip install BASE_URL/files/felix-0.3.0-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.4.0-py3-none-any.whl
 ```
 
-A direct wheel URL needs no extra flags: pip fetches Pillow and rich from PyPI itself, and
+A direct wheel URL needs no extra flags: pip fetches NumPy and rich from PyPI itself, and
 there is no name clash because it never searches an index for `felix`. Replace the version in
 the file name for other releases (all wheels stay on the site).
 
 ### Anywhere else (index)
 
 ```
-pip install Pillow rich
+pip install numpy rich
 pip install --no-deps --no-index --find-links BASE_URL/simple/felix/ felix
 ```
 
@@ -73,14 +74,19 @@ Why the extra flags:
 
 - **`--no-index`**: pip must not search PyPI. A *different, public* package called `felix` lives
   there and would be installed instead of this one. Never use `--extra-index-url` for Felix.
-- **`--no-deps`** and the separate `pip install Pillow rich`: with `--no-index` pip can't fetch
+- **`--no-deps`** and the separate `pip install numpy rich`: with `--no-index` pip can't fetch
   dependencies from this page, so install them first the normal way.
 
-Upgrade to the newest version by adding `--upgrade`; pin one with `felix==0.3.0`.
+Upgrade to the newest version by adding `--upgrade`; pin one with `felix==0.4.0`.
 
 Try the example pipeline: download [animals.py](examples/animals.py) and
 [bicycle.png](examples/assets/bicycle.png) (keep it in an `assets/` folder next to the script), then
 run `python animals.py`.
+
+### JPEG
+
+Felix reads and writes PNG on its own. Reading JPEG (for example Roboflow exports with `.jpg` images, or JPEG
+sprites and backgrounds) needs Pillow: `pip install Pillow`. Without it Felix explains what is missing.
 
 ### Notes
 
@@ -155,6 +161,14 @@ reproducible; the seed used is stored in `metadata.yml`.
 Note: an object partly covered by a later object keeps its full box (occlusion is not
 subtracted); an object fully off-canvas is skipped and reported.
 
+### Rendering backend
+
+Felix draws everything itself with NumPy: shapes are rasterised with 4×4 supersampling for smooth edges;
+scaling uses an anti-aliased triangle filter; rotation is bilinear and grows the sprite so nothing is clipped;
+hue shifts work in HSV; layers are composited with premultiplied alpha; images are written as PNG by Felix's own
+encoder. Bounding boxes come from the sprite's alpha channel (pixels above 16/255), so transparent padding in
+image sprites never inflates a box. About 75 images/s at 640×640 on a laptop CPU.
+
 ---
 
 ## API reference
@@ -177,6 +191,30 @@ inferred class name) and, except `image`, `color=` (hex, CSS name or RGB tuple).
 | `rectangle` | `width`, `height` |
 | `polygon` | `vertices=[(x, y), ...]` (≥ 3) |
 | `image` | `source` path, optional `width` / `height` (keeps aspect if only one). Use PNGs with transparency for tight boxes. Relative paths resolve against the working directory, then the calling script's folder. |
+
+#### `fx.stack(*parts, position=None, color=None, name=None)`
+One object built from several shapes:
+
+```python
+with fx.class_set("animals"):
+    cat = fx.stack(
+        fx.toolkit.polygon(vertices=[(0, 14), (7, 0), (14, 14)], position=(-13, -22)),   # left ear
+        fx.toolkit.polygon(vertices=[(0, 14), (7, 0), (14, 14)], position=(13, -22)),    # right ear
+        fx.toolkit.circle(radius=22),                                                     # head
+        fx.toolkit.circle(radius=3, position=(-8, -4), color="black"),                    # eyes
+        fx.toolkit.circle(radius=3, position=(8, -4), color="black"),
+        color="#e8a33d",
+    )
+```
+
+- Inside `fx.class_set` the stack is **one class**, named after its variable (`cat`); its parts are not classes.
+- Each part's `position` is where *its centre* sits relative to the stack's centre (default `(0, 0)`); later parts
+  are drawn on top of earlier ones.
+- Parts without a `color` take the stack's colour (or the class colour from the palette); parts with one keep it.
+- The stack is painted, transformed (rotation, scale, hue, ...) and boxed as a whole: its box covers every visible
+  part. `fx.paint(cat, position=...)` places the centre of the stack's overall extent.
+- Stacks can contain stacks. Any shape works as a part: circles, rectangles, polygons, images.
+- A shape that is already a registered class can't be reused as a part (create the part in the call instead).
 
 ### Steps
 
@@ -229,7 +267,7 @@ live progress panel (disable with `quiet=True`). Returns `{"pairs", "seed", "box
 
 #### `fx.load(path)` → `Dataset`
 Read a folder or `.felix`: `len(ds)`, `ds.metadata`, `ds.stems`, `ds.classes` (names ordered by class id),
-`ds.annotation(stem)`, `ds.image(stem)` (PIL image), `ds.image_bytes(stem)`, iteration yields
+`ds.annotation(stem)`, `ds.image(stem)` (a Felix `Image`, see below), `ds.image_bytes(stem)`, iteration yields
 `(stem, annotation)`. Use as a context manager or call `ds.close()`. Datasets are picklable (each
 DataLoader worker re-opens its own file handle).
 
@@ -243,6 +281,12 @@ read API (`len`, `stems`, `annotation`, `image`, iteration, `classes`, `metadata
 #### `fx.partition(source, output=None, parts=None, ratio=None, size=None, by_split=False, names=None, shuffle=False, seed=0, pack=None, overwrite=False, quiet=False)` → list of paths
 Split a dataset into several complete datasets; the Python form of [`felix partition`](#cli). Give exactly one of
 `parts=N`, `ratio=(80, 10, 10)`, `size=K` or `by_split=True`. `source` is a path or a loaded `Dataset`.
+
+#### `felix.raster.Image`
+What `ds.image(stem)` returns: an RGB or RGBA image backed by a NumPy array. `.size`, `.width`, `.height`,
+`.mode`, `.array` (uint8, height × width × channels), `.convert("RGB" | "RGBA")`, `.getpixel((x, y))`, `.tobytes()`,
+`.save("x.png")` (other formats via Pillow), `.to_pil()`, `.show()`. `Image.open(path)` reads PNG natively and
+other formats through Pillow.
 
 #### `fx.reset()`
 Clear all classes and steps (tests, notebooks).
