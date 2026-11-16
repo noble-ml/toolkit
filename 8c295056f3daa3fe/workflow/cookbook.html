@@ -325,10 +325,16 @@ r.show()</code></pre>
 <pre><code>layer 4 (Residual): Residual cannot add its two paths.
   why: the layers output (16, 15, 15) but the shortcut carries (8, 30, 30); addition needs identical shapes.
   fix: ... project the input with shortcut=wf.Conv2D(16, kernel_size=1, stride=2).</code></pre>
+<h3 id="workflow-init"><code>workflow init</code></h3>
+<p><strong>Toddler words:</strong> "give me a notebook that already works." It writes a Jupyter notebook with a small brain, a report card before and after learning, and saving.</p>
+<p><strong>Why you'd use it:</strong> the fastest way to start a new detector, or to show someone how Workflow fits together. Every step is a cell you can read and change; the model is a flat list of layers you can grow. Without a dataset it makes a practice one, so the first run always works.</p>
+<pre><code>workflow init detector.ipynb --dataset data.felix --img-size 256 --epochs 30 --device auto</code></pre>
+<p><strong>Watch out:</strong> the image size must be a multiple of 32 (the starter model halves the picture four times).</p>
 <h3 id="workflow-commands">Workflow commands</h3>
 <p><strong>Toddler words:</strong> the same tools, typed in the terminal.</p>
 <p><strong>Why you'd use it:</strong> checking, converting and running models without writing Python.</p>
-<pre><code>workflow info detector.nbm
+<pre><code>workflow init my_detector.ipynb                     # a starter notebook
+workflow info detector.nbm
 workflow predict detector.nbm photo.jpg --confidence 0.25
 workflow eval detector.nbm --dataset shapes.felix --split test
 workflow quantize detector.nbm int8 --calibration shapes.felix

@@ -76,7 +76,8 @@ fit, the error says **what** happened, **why**, and **how to fix it**, naming th
 - **Export**: `.nbm` at any precision, ONNX (FP32, FP16, INT8 as QDQ).
 - **Inference**: `model.predict(...)` on images or batches, results saved to `results/`.
 - **Devices**: `"cpu"`, `"cuda"`, `"gpu"`, `"mps"` (experimental), `"auto"`.
-- **CLI**: `workflow info | predict | eval | quantize | export | script | devices`.
+- **CLI**: `workflow init | info | predict | eval | quantize | export | script | devices`. `workflow init` writes a
+  ready-to-run starter notebook.
 
 ---
 
@@ -902,6 +903,21 @@ layer 4 (Residual): Residual cannot add its two paths.
   fix: ... project the input with shortcut=wf.Conv2D(16, kernel_size=1, stride=2).
 ```
 
+#### `workflow init`
+
+**Toddler words:** "give me a notebook that already works." It writes a Jupyter notebook with a small brain, a
+report card before and after learning, and saving.
+
+**Why you'd use it:** the fastest way to start a new detector, or to show someone how Workflow fits together.
+Every step is a cell you can read and change; the model is a flat list of layers you can grow. Without a dataset it
+makes a practice one, so the first run always works.
+
+```
+workflow init detector.ipynb --dataset data.felix --img-size 256 --epochs 30 --device auto
+```
+
+**Watch out:** the image size must be a multiple of 32 (the starter model halves the picture four times).
+
 #### Workflow commands
 
 **Toddler words:** the same tools, typed in the terminal.
@@ -909,6 +925,7 @@ layer 4 (Residual): Residual cannot add its two paths.
 **Why you'd use it:** checking, converting and running models without writing Python.
 
 ```
+workflow init my_detector.ipynb                     # a starter notebook
 workflow info detector.nbm
 workflow predict detector.nbm photo.jpg --confidence 0.25
 workflow eval detector.nbm --dataset shapes.felix --split test
@@ -1001,6 +1018,9 @@ wf.Residual(
 ---
 
 ## Getting started
+
+The quickest start is `workflow init`: it writes a notebook with a small model, benchmarks before and after
+training, and saving, that runs as-is ([CLI](#init)). This page explains the pieces.
 
 A model is a **stack** of layers. Each layer receives the previous layer's output, so the only numbers you write
 are the ones you decide: filters, kernel sizes, strides, padding.
@@ -1580,6 +1600,7 @@ Errors carry `what`, `why`, `fix` and `where` attributes for programs that want 
 `workflow` (or `python -m workflow`), in the same minimal style as Felix.
 
 ```
+workflow init [NOTEBOOK.ipynb] [--dataset D]    starter notebook: small model, benchmarks before/after, saving
 workflow info MODEL.nbm                        classes, precision, training progress, layer summary
 workflow predict MODEL.nbm IMG [IMG ...]       detect; annotated images + predictions.json in results/
 workflow eval MODEL.nbm [--dataset D --split test]   size/FLOPs/FPS, plus accuracy with a dataset
@@ -1591,6 +1612,36 @@ workflow devices                               cpu / cuda / mps, and why somethi
 
 `quantize` writes `MODEL-<type>.nbm` by default and prints the size before and after. Commands never overwrite
 existing files without `--overwrite`. Errors print the what / why / fix explanation and exit with status 1.
+
+### init
+
+```
+workflow init                                   # → workflow.ipynb
+workflow init detector.ipynb --dataset data.felix --img-size 320 --epochs 50 --device cuda
+```
+
+Writes a Jupyter notebook that runs top to bottom:
+
+1. settings (`DATASET`, `IMG_SIZE`, `EPOCHS`, `DEVICE`) in the first cell;
+2. the data: your Felix dataset, or, if it doesn't exist yet, a small practice dataset of shapes that the notebook
+   makes itself, so it works with no setup;
+3. a small, readable detector written as one flat `wf.stack` (Conv-BN-SiLU steps, CSP, SPPF, two named features,
+   FPN, head: about 0.4M parameters), its summary and its graph;
+4. **benchmark before training**: `wf.eval(model, dataset=data.test)`;
+5. training with a live progress bar (re-running the cell with a bigger `EPOCHS` continues);
+6. **benchmark after training** and a before/after table;
+7. saving: `model.nbm`, an int8 copy and an ONNX file, a reload check, and a prediction drawn inline.
+
+| Option | Default | |
+|---|---|---|
+| `path` | `workflow.ipynb` | must end in `.ipynb` |
+| `--dataset` | `practice_shapes.felix` | made by the notebook on first run if it doesn't exist |
+| `--img-size` | 256 | a multiple of 32, at least 64 |
+| `--epochs` | 30 | |
+| `--device` | `auto` | `cpu`, `cuda`, `gpu`, `mps` |
+| `--overwrite` | off | replace an existing notebook |
+
+Open it with Jupyter, VS Code or Colab.
 
 ### Inference scripts
 
