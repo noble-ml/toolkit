@@ -30,17 +30,45 @@ model = wf.stack(
 model.summary()</code></pre>
 <ul><li><strong>Input channels are inferred.</strong> <code>wf.Conv2D(32, kernel_size=3)</code> works out how many channels it receives.</li><li><strong>Shapes are checked before anything runs.</strong> The first use of a model builds it for <code>input=</code> (default 3×640×640) and validates every layer.</li><li><strong>Padding is explicit.</strong> <code>padding=1</code> adds one pixel on each side; there is no <code>"same"</code>. For stride 1, <code>padding=kernel_size//2</code> keeps the size.</li><li><strong>Bias is automatic.</strong> A convolution right before <code>BatchNorm2D</code> has none; any other has one.</li></ul>
 <h2 id="a-detector">A detector</h2>
-<pre><code>def down(filters):
-    return [wf.Conv2D(filters, kernel_size=3, stride=2, padding=1), wf.BatchNorm2D(), wf.SiLU()]
+<p>One layer per line, top to bottom, exactly as the picture flows through them:</p>
+<pre><code>model = wf.stack(
+    # stem: 256 → 128
+    wf.Conv2D(16, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
 
-model = wf.stack(
-    *down(16), *down(32), wf.CSP(),
-    *down(64), wf.CSP(n=2), wf.feature("p3"),        # remember this map as "p3"
-    *down(128), wf.CSP(n=2), wf.feature("p4"),
-    *down(256), wf.SPPF(), wf.feature("p5"),
-    wf.FPN("p3", "p4", "p5", channels=64),           # fuse the named maps
+    # 128 → 64
+    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=1),
+
+    # 64 → 32: good for small objects
+    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=2),
+    wf.feature("p3"),
+
+    # 32 → 16: medium objects
+    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=2),
+    wf.feature("p4"),
+
+    # 16 → 8: large objects
+    wf.Conv2D(256, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.SPPF(kernel_size=5),
+    wf.feature("p5"),
+
+    # neck and head
+    wf.FPN("p3", "p4", "p5", channels=64),
     wf.PAN(channels=64),
-    wf.head(classes=3),                              # boxes, confidence, classes
+    wf.head(classes=3),
+
     input=(3, 256, 256),
 )</code></pre>
 <h2 id="train-evaluate-use">Train, evaluate, use</h2>

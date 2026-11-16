@@ -33,9 +33,22 @@ import workflow as wf
 data = fx.load("shapes.felix")
 
 model = wf.stack(
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1), wf.BatchNorm2D(), wf.SiLU(),
-    wf.Conv2D(64, kernel_size=3, stride=2, padding=1), wf.BatchNorm2D(), wf.SiLU(), wf.CSP(), wf.feature("p3"),
-    wf.Conv2D(128, kernel_size=3, stride=2, padding=1), wf.BatchNorm2D(), wf.SiLU(), wf.SPPF(), wf.feature("p4"),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+
+    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(),
+    wf.feature("p3"),
+
+    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.SPPF(),
+    wf.feature("p4"),
+
     wf.FPN("p3", "p4", channels=64),
     wf.head(classes=3),
 )
@@ -408,7 +421,9 @@ one. `input` is the picture size the model is built and checked for.
 ```python
 model = wf.stack(
     wf.Conv2D(16, kernel_size=3, stride=1, padding=1),
-    wf.ReLU(),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.feature("p1"),
     input=(3, 640, 640),
 )
 ```
@@ -644,9 +659,19 @@ wf.Focus(filters=32, kernel_size=3)
 learn "a small change to the input" instead of a whole new picture.
 
 ```python
-wf.Residual(wf.Conv2D(64, kernel_size=3, stride=1, padding=1), wf.SiLU(), shortcut=None)
-wf.Residual(wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
-            shortcut=wf.Conv2D(128, kernel_size=1, stride=2, padding=0))      # shape changes → project the shortcut
+wf.Residual(
+    wf.Conv2D(64, kernel_size=3, stride=1, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    shortcut=None,                                    # same shape in and out: add the input as it is
+)
+
+wf.Residual(
+    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    shortcut=wf.Conv2D(128, kernel_size=1, stride=2, padding=0),   # shape changes → project the input to match
+)
 ```
 
 **Watch out:** both paths must end the same shape. If they don't, the error tells you the exact `shortcut=` to add.
@@ -659,9 +684,11 @@ wf.Residual(wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
 for example), Inception-style.
 
 ```python
-wf.parallel(wf.Conv2D(16, kernel_size=1, stride=1, padding=0),
-            wf.Conv2D(16, kernel_size=3, stride=1, padding=1),
-            merge="concat")                                   # or merge="add" (then the outputs must match)
+wf.parallel(
+    wf.Conv2D(16, kernel_size=1, stride=1, padding=0),
+    wf.Conv2D(16, kernel_size=3, stride=1, padding=1),
+    merge="concat",                                   # or merge="add" (then the outputs must match)
+)
 ```
 
 #### `wf.feature`
@@ -895,24 +922,57 @@ workflow devices
 
 ### Part 6 · Recipes: how the pieces fit
 
-**A downsampling step** (the most common pattern in a backbone):
+**A downsampling step** (the most common pattern in a backbone): three lines that halve the picture and add
+channels. You'll see it again and again in the detector below.
 
 ```python
-def down(filters):
-    return [wf.Conv2D(filters, kernel_size=3, stride=2, padding=1), wf.BatchNorm2D(), wf.SiLU()]
+wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+wf.BatchNorm2D(),
+wf.SiLU(),
 ```
 
-**A small detector**: backbone (down + CSP, naming three depths), SPPF, then FPN + PAN + head:
+**A small detector**: the backbone halves the picture five times, naming three depths with `wf.feature`; SPPF
+widens the view; FPN + PAN mix the named maps; the head finds the boxes.
 
 ```python
 model = wf.stack(
-    *down(16), *down(32), wf.CSP(n=1),
-    *down(64), wf.CSP(n=2), wf.feature("p3"),          # 1/8 size: small objects
-    *down(128), wf.CSP(n=2), wf.feature("p4"),         # 1/16: medium
-    *down(256), wf.SPPF(kernel_size=5), wf.feature("p5"),   # 1/32: large
+    # stem: 256 → 128
+    wf.Conv2D(16, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+
+    # 128 → 64
+    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=1),
+
+    # 64 → 32: good for small objects
+    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=2),
+    wf.feature("p3"),
+
+    # 32 → 16: medium objects
+    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=2),
+    wf.feature("p4"),
+
+    # 16 → 8: large objects
+    wf.Conv2D(256, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.SPPF(kernel_size=5),
+    wf.feature("p5"),
+
+    # neck and head
     wf.FPN("p3", "p4", "p5", channels=64),
     wf.PAN(channels=64),
     wf.head(classes=3),
+
     input=(3, 256, 256),
 )
 ```
@@ -929,8 +989,13 @@ model.export(format="nbm", output="detector-int8.nbm", precision="int8")
 **A cheaper backbone block** (mobile-style): look around cheaply, mix, add back:
 
 ```python
-wf.Residual(wf.DepthwiseConv2D(kernel_size=3, stride=1, padding=1), wf.BatchNorm2D(), wf.SiLU(),
-            wf.PointwiseConv2D(64), wf.BatchNorm2D())
+wf.Residual(
+    wf.DepthwiseConv2D(kernel_size=3, stride=1, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.PointwiseConv2D(64),
+    wf.BatchNorm2D(),
+)
 ```
 
 ---
@@ -962,18 +1027,47 @@ model.summary()
 
 ### A detector
 
-```python
-def down(filters):
-    return [wf.Conv2D(filters, kernel_size=3, stride=2, padding=1), wf.BatchNorm2D(), wf.SiLU()]
+One layer per line, top to bottom, exactly as the picture flows through them:
 
+```python
 model = wf.stack(
-    *down(16), *down(32), wf.CSP(),
-    *down(64), wf.CSP(n=2), wf.feature("p3"),        # remember this map as "p3"
-    *down(128), wf.CSP(n=2), wf.feature("p4"),
-    *down(256), wf.SPPF(), wf.feature("p5"),
-    wf.FPN("p3", "p4", "p5", channels=64),           # fuse the named maps
+    # stem: 256 → 128
+    wf.Conv2D(16, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+
+    # 128 → 64
+    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=1),
+
+    # 64 → 32: good for small objects
+    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=2),
+    wf.feature("p3"),
+
+    # 32 → 16: medium objects
+    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=2),
+    wf.feature("p4"),
+
+    # 16 → 8: large objects
+    wf.Conv2D(256, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.SPPF(kernel_size=5),
+    wf.feature("p5"),
+
+    # neck and head
+    wf.FPN("p3", "p4", "p5", channels=64),
     wf.PAN(channels=64),
-    wf.head(classes=3),                              # boxes, confidence, classes
+    wf.head(classes=3),
+
     input=(3, 256, 256),
 )
 ```
@@ -1092,11 +1186,23 @@ picks a tensor by position or channel count. A missing name lists the names that
 when one is close), and a duplicate name is an error.
 
 ```python
-wf.stack(
-    ..., wf.feature("p3"),
-    ..., wf.feature("p4"),
-    wf.Conv2D(64, kernel_size=1), wf.Upsample(2), wf.feature("up"),
-    wf.concat("p3", "up"),
+model = wf.stack(
+    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.feature("p3"),                  # 1/2 size, 32 channels
+
+    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.feature("p4"),                  # 1/4 size, 64 channels
+
+    wf.PointwiseConv2D(32),
+    wf.Upsample(2),
+    wf.feature("up"),                  # back to 1/2 size
+
+    wf.concat("p3", "up"),             # 32 + 32 = 64 channels at 1/2 size
+    input=(3, 256, 256),
 )
 ```
 

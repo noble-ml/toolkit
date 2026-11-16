@@ -48,19 +48,44 @@ train, val, test = dataset.train, dataset.val, dataset.test
 print(f"\n{data_path}: {dataset.splits}, classes {dataset.classes}\n")
 
 # 2. architecture: a CSP backbone, FPN + PAN neck and a detection head, all inferred -----------------
-def down(filters):
-    return [wf.Conv2D(filters, kernel_size=3, stride=2, padding=1), wf.BatchNorm2D(), wf.SiLU()]
-
-
 model = wf.stack(
-    *down(16),
-    *down(32), wf.CSP(),
-    *down(64), wf.CSP(n=2), wf.feature("p3"),
-    *down(128), wf.CSP(n=2), wf.feature("p4"),
-    *down(256), wf.SPPF(), wf.feature("p5"),
+    # stem: 256 → 128
+    wf.Conv2D(16, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+
+    # 128 → 64
+    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=1),
+
+    # 64 → 32: good for small objects
+    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=2),
+    wf.feature("p3"),
+
+    # 32 → 16: medium objects
+    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(n=2),
+    wf.feature("p4"),
+
+    # 16 → 8: large objects
+    wf.Conv2D(256, kernel_size=3, stride=2, padding=1),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.SPPF(kernel_size=5),
+    wf.feature("p5"),
+
+    # neck and head
     wf.FPN("p3", "p4", "p5", channels=64),
     wf.PAN(channels=64),
     wf.head(classes=len(dataset.classes)),
+
     input=(3, SIZE, SIZE),
 )
 model.summary()
