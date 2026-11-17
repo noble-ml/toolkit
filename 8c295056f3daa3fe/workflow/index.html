@@ -24,17 +24,17 @@ import workflow as wf
 data = fx.load("shapes.felix")
 
 model = wf.stack(
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
 
-    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(),
     wf.feature("p3"),
 
-    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.SPPF(),

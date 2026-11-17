@@ -21,12 +21,12 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 <h2 id="features">Features</h2>
 <p>Features are how later layers reach back to earlier tensors. They are looked up by name only; Workflow never picks a tensor by position or channel count. A missing name lists the names that exist (with a "did you mean" when one is close), and a duplicate name is an error.</p>
 <pre><code>model = wf.stack(
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.feature("p3"),                  # 1/2 size, 32 channels
 
-    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.feature("p4"),                  # 1/4 size, 64 channels
@@ -46,5 +46,5 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 <p><code>wf.Residual</code> checks that its layers keep the input's shape. If they don't, the error shows both shapes and the projection to add:</p>
 <pre><code>layer 2 (Residual): Residual cannot add its two paths.
   why: the layers output (16, 15, 15) but the shortcut carries (8, 30, 30); addition needs identical shapes.
-  fix: keep the shape inside the block (same channels, stride 1, padding k//2), or project the input with
+  fix: keep the shape inside the block (same channels, stride 1, padding='same'), or project the input with
        shortcut=wf.Conv2D(16, kernel_size=1, stride=2).</code></pre></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

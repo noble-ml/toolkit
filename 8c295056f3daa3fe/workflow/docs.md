@@ -19,7 +19,7 @@
 - [Devices and backends](#devices-and-backends)
 - [Errors](#errors)
 - [CLI](#cli)
-- [Changes in 0.2](#changes-in-02)
+- [Changes](#changes)
 
 ---
 
@@ -33,17 +33,17 @@ import workflow as wf
 data = fx.load("shapes.felix")
 
 model = wf.stack(
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
 
-    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(),
     wf.feature("p3"),
 
-    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.SPPF(),
@@ -99,7 +99,7 @@ Why the flags: `--no-index` keeps pip from installing the unrelated public packa
 ### Colab / notebooks
 
 ```
-!pip install BASE_URL/files/felix-0.4.0-py3-none-any.whl BASE_URL/files/workflow-0.2.0-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.4.0-py3-none-any.whl BASE_URL/files/workflow-0.3.0-py3-none-any.whl
 ```
 
 Direct wheel URLs need no flags; pip fetches the dependencies from PyPI. Colab GPUs work with `device="cuda"`.
@@ -421,7 +421,7 @@ one. `input` is the picture size the model is built and checked for.
 
 ```python
 model = wf.stack(
-    wf.Conv2D(16, kernel_size=3, stride=1, padding=1),
+    wf.Conv2D(16, kernel_size=3, stride=1, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.feature("p1"),
@@ -433,30 +433,38 @@ model = wf.stack(
 
 #### `padding` (used by every layer with a window)
 
-**Toddler words:** a cushion of empty pixels around the picture so the edges don't get squished away.
+**Toddler words:** a cushion of empty pixels around the picture so the edges don't get squished away. You pick one
+of two words: `"same"` (put a cushion on, keep the picture the same size) or `"valid"` (no cushion, the picture
+shrinks a little).
 
-**Why you'd use it:** without padding, every 3×3 window shrinks the picture by 2 pixels. `padding = kernel_size // 2`
-(1 for size 3, 2 for size 5) keeps it the same size at stride 1.
+**Why you'd use it:** without a cushion, every 3×3 window eats one pixel from each edge, so the picture shrinks a
+bit at every layer. `"same"` stops that, which keeps sizes easy to reason about: a stride-1 layer keeps the size, and a
+stride-2 layer exactly halves it (rounding up). Almost every layer in a detector uses `"same"`. `"valid"` (the
+default) is for when you *want* the picture to shrink, or want the window to only ever see real pixels.
 
 ```python
-padding=1                     # 1 pixel on every side
-padding=(1, 2)                # 1 top and bottom, 2 left and right
-padding=(0, 1, 0, 1)          # top, bottom, left, right
+wf.Conv2D(32, kernel_size=3, stride=1, padding="same")    # 256×256 in → 256×256 out
+wf.Conv2D(32, kernel_size=3, stride=2, padding="same")    # 256×256 in → 128×128 out
+wf.Conv2D(32, kernel_size=3, stride=1, padding="valid")   # 256×256 in → 254×254 out
 ```
 
-**Watch out:** only numbers. `"same"` and `"valid"` are refused (the error tells you the number to use).
+**Watch out:** numbers like `padding=1` are not accepted. The error tells you which word to use (`1` meant
+`"same"` for a 3×3, `0` meant `"valid"`).
 
 #### `wf.Conv2D`
 
 **Toddler words:** little magnifying glasses that slide over the picture, each looking for one kind of pattern (an
-edge, a corner, a stripe). `filters=32` means 32 different glasses.
+edge, a corner, a stripe). The first number is `out_channels`: how many different glasses, so how many channels come
+*out*. `32` means 32 glasses, so 32 channels come out.
 
 **Why you'd use it:** it's *the* building block. Early convs find edges; later ones find parts and whole objects.
 `stride=2` takes big steps, halving the picture; that's how a backbone goes from big-and-shallow to small-and-deep.
+You never write how many channels come *in*: Workflow reads that from the layer before.
 
 ```python
-wf.Conv2D(32, kernel_size=3, stride=1, padding=1)    # same size, 32 channels
-wf.Conv2D(64, kernel_size=3, stride=2, padding=1)    # half size, 64 channels: a "downsampling" step
+wf.Conv2D(32, kernel_size=3, stride=1, padding="same")    # 32 channels out, same size
+wf.Conv2D(64, kernel_size=3, stride=2, padding="same")    # 64 channels out, half size: a "downsampling" step
+wf.Conv2D(out_channels=64, kernel_size=3, stride=2, padding="same")   # the same, with the name written out
 ```
 
 #### `wf.DepthwiseConv2D`
@@ -467,7 +475,7 @@ wf.Conv2D(64, kernel_size=3, stride=2, padding=1)    # half size, 64 channels: a
 then mix the channels with a pointwise conv.
 
 ```python
-wf.DepthwiseConv2D(kernel_size=3, stride=1, padding=1)    # keeps the channel count
+wf.DepthwiseConv2D(kernel_size=3, stride=1, padding="same")    # keeps the channel count
 ```
 
 #### `wf.PointwiseConv2D`
@@ -489,7 +497,7 @@ wf.PointwiseConv2D(64)       # kernel 1, stride 1, padding 0 are fixed: that's w
 small or fast models.
 
 ```python
-wf.SeparableConv2D(64, kernel_size=3, stride=1, padding=1)
+wf.SeparableConv2D(64, kernel_size=3, stride=1, padding="same")
 ```
 
 #### `wf.DilatedConv2D`
@@ -500,7 +508,7 @@ wf.SeparableConv2D(64, kernel_size=3, stride=1, padding=1)
 a network or for big objects.
 
 ```python
-wf.DilatedConv2D(32, kernel_size=3, dilation=2, stride=1, padding=2)   # padding = dilation keeps the size for kernel 3
+wf.DilatedConv2D(32, kernel_size=3, dilation=2, stride=1, padding="same")   # sees a 5×5 area, keeps the size
 ```
 
 #### `wf.TransposeConv2D`
@@ -511,14 +519,15 @@ wf.DilatedConv2D(32, kernel_size=3, dilation=2, stride=1, padding=2)   # padding
 which just copies pixels, it *learns* how to fill in the new pixels.
 
 ```python
-wf.TransposeConv2D(32, kernel_size=2, stride=2, padding=0)   # exactly twice the height and width
+wf.TransposeConv2D(32, kernel_size=2, stride=2, padding="valid")   # exactly twice the height and width
+wf.TransposeConv2D(32, kernel_size=4, stride=2, padding="same")    # also twice, blending neighbours more smoothly
 ```
 
-Output size: `(size − 1) × stride − 2 × padding + kernel_size`. With `kernel_size=2, stride=2, padding=0` that is
-exactly double, which is why those are the defaults. `kernel_size=4, stride=2, padding=1` also doubles and
-blends neighbours more smoothly.
+Output size: with `"same"` it is exactly `size × stride`; with `"valid"` it is `(size − 1) × stride + kernel_size`.
+With `kernel_size=2, stride=2` both give exactly double, which is why those are the defaults.
 
-**Watch out:** it stays float in int8 models (Workflow warns you). Use `Upsample` + `Conv2D` if everything must be int8.
+**Watch out:** `"same"` needs `kernel_size` at least as big as `stride` (the error says so). It stays float in int8
+models (Workflow warns you); use `Upsample` + `Conv2D` if everything must be int8.
 
 #### `wf.BatchNorm2D`
 
@@ -547,17 +556,25 @@ wf.SiLU()
 wf.Sigmoid()
 ```
 
-#### `wf.MaxPool2D`, `wf.AvgPool2D`
+#### `wf.MaxPool2D`, `wf.MinPool2D`, `wf.AvgPool2D`
 
-**Toddler words:** shrink the picture. Max keeps the loudest pixel in each little square; Avg keeps the average.
+**Toddler words:** shrink the picture by looking at little squares and keeping one number from each. Max keeps the
+loudest pixel, Min keeps the quietest, Avg keeps the average.
 
-**Why you'd use it:** a cheap way to halve the size with no weights to learn. Max is good at keeping "is the
-pattern anywhere here?"; Avg smooths things out.
+**Why you'd use it:** a cheap way to make the picture smaller (or smoother) with no weights to learn.
+- **Max** answers "is the pattern anywhere in here?". It is the usual choice, and what `SPPF` uses.
+- **Min** answers "is anything *missing* or dark here?", for dark objects on light backgrounds, gaps or holes.
+- **Avg** smooths things out and keeps the overall level.
 
 ```python
-wf.MaxPool2D(kernel_size=2, stride=None, padding=0)      # stride defaults to kernel_size: half the size
-wf.AvgPool2D(kernel_size=3, stride=1, padding=1)         # same size, just smoothed
+wf.MaxPool2D(kernel_size=2, stride=None, padding="valid")   # stride defaults to kernel_size: half the size
+wf.MaxPool2D(kernel_size=5, stride=1, padding="same")       # same size: every pixel becomes its 5×5 neighbourhood's max
+wf.MinPool2D(kernel_size=3, stride=2, padding="same")       # half the size, keeping the smallest values
+wf.AvgPool2D(kernel_size=3, stride=1, padding="same")       # same size, just smoothed
 ```
+
+**Watch out:** the cushion pixels from `"same"` never win a max or a min, but they count as zero in an average,
+so averages at the very edge come out a little darker.
 
 #### `wf.Upsample`
 
@@ -582,11 +599,11 @@ back so nothing gets lost.
 the thin version, and the added shortcut keeps learning stable in deep stacks.
 
 ```python
-wf.Bottleneck(filters=None, kernel_size=3, stride=1, reduction=2, shortcut=True)   # same shape out as in
-wf.Bottleneck(filters=128, kernel_size=3, stride=2, reduction=2, shortcut=True)    # wider and half size
+wf.Bottleneck(out_channels=None, kernel_size=3, stride=1, reduction=2, shortcut=True)   # same shape out as in
+wf.Bottleneck(out_channels=128, kernel_size=3, stride=2, reduction=2, shortcut=True)    # 128 channels out, half size
 ```
 
-**Watch out:** when `filters` or `stride` change the shape, the shortcut gets a 1×1 projection automatically,
+**Watch out:** when `out_channels` or `stride` change the shape, the shortcut gets a 1×1 projection automatically,
 so you never have to match the shapes yourself.
 
 #### `wf.CSP`
@@ -598,7 +615,7 @@ together.
 backbone block after each downsampling conv.
 
 ```python
-wf.CSP(filters=None, n=1, shortcut=True)      # n = how many bottlenecks on the busy path
+wf.CSP(out_channels=None, n=1, shortcut=True)      # n = how many bottlenecks on the busy path
 ```
 
 #### `wf.SPP`, `wf.SPPF`
@@ -610,8 +627,8 @@ you saw.
 the same result faster with three chained small pools, so prefer it.
 
 ```python
-wf.SPP(filters=None, kernels=(5, 9, 13))
-wf.SPPF(filters=None, kernel_size=5)
+wf.SPP(out_channels=None, kernels=(5, 9, 13))
+wf.SPPF(out_channels=None, kernel_size=5)
 ```
 
 #### `wf.SE`
@@ -643,7 +660,7 @@ away.
 **Why you'd use it:** as the very first layer, a fast way to shrink a big input without losing pixels.
 
 ```python
-wf.Focus(filters=32, kernel_size=3)
+wf.Focus(out_channels=32, kernel_size=3)
 ```
 
 **Watch out:** the input height and width must be even.
@@ -661,17 +678,17 @@ learn "a small change to the input" instead of a whole new picture.
 
 ```python
 wf.Residual(
-    wf.Conv2D(64, kernel_size=3, stride=1, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=1, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     shortcut=None,                                    # same shape in and out: add the input as it is
 )
 
 wf.Residual(
-    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
-    shortcut=wf.Conv2D(128, kernel_size=1, stride=2, padding=0),   # shape changes → project the input to match
+    shortcut=wf.Conv2D(128, kernel_size=1, stride=2, padding="valid"),   # shape changes → project the input to match
 )
 ```
 
@@ -686,8 +703,8 @@ for example), Inception-style.
 
 ```python
 wf.parallel(
-    wf.Conv2D(16, kernel_size=1, stride=1, padding=0),
-    wf.Conv2D(16, kernel_size=3, stride=1, padding=1),
+    wf.Conv2D(16, kernel_size=1, stride=1, padding="valid"),
+    wf.Conv2D(16, kernel_size=3, stride=1, padding="same"),
     merge="concat",                                   # or merge="add" (then the outputs must match)
 )
 ```
@@ -943,7 +960,7 @@ workflow devices
 channels. You'll see it again and again in the detector below.
 
 ```python
-wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
 wf.BatchNorm2D(),
 wf.SiLU(),
 ```
@@ -954,32 +971,32 @@ widens the view; FPN + PAN mix the named maps; the head finds the boxes.
 ```python
 model = wf.stack(
     # stem: 256 → 128
-    wf.Conv2D(16, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
 
     # 128 → 64
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=1),
 
     # 64 → 32: good for small objects
-    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=2),
     wf.feature("p3"),
 
     # 32 → 16: medium objects
-    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=2),
     wf.feature("p4"),
 
     # 16 → 8: large objects
-    wf.Conv2D(256, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(256, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.SPPF(kernel_size=5),
@@ -1007,7 +1024,7 @@ model.export(format="nbm", output="detector-int8.nbm", precision="int8")
 
 ```python
 wf.Residual(
-    wf.DepthwiseConv2D(kernel_size=3, stride=1, padding=1),
+    wf.DepthwiseConv2D(kernel_size=3, stride=1, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.PointwiseConv2D(64),
@@ -1023,13 +1040,13 @@ The quickest start is `workflow init`: it writes a notebook with a small model, 
 training, and saving, that runs as-is ([CLI](#init)). This page explains the pieces.
 
 A model is a **stack** of layers. Each layer receives the previous layer's output, so the only numbers you write
-are the ones you decide: filters, kernel sizes, strides, padding.
+are the ones you decide: output channels, kernel sizes, strides, padding.
 
 ```python
 import workflow as wf
 
 model = wf.stack(
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.Bottleneck(),
@@ -1038,11 +1055,12 @@ model = wf.stack(
 model.summary()
 ```
 
-- **Input channels are inferred.** `wf.Conv2D(32, kernel_size=3)` works out how many channels it receives.
+- **The first number is the output channels.** In `wf.Conv2D(32, kernel_size=3)`, 32 channels come out; the input
+  channels are worked out from the previous layer.
 - **Shapes are checked before anything runs.** The first use of a model builds it for `input=` (default 3×640×640)
   and validates every layer.
-- **Padding is explicit.** `padding=1` adds one pixel on each side; there is no `"same"`. For stride 1, `padding=kernel_size//2`
-  keeps the size.
+- **Padding is a word.** `padding="same"` keeps the size (with `stride=2` it halves it); `padding="valid"` adds none,
+  so the picture shrinks a little.
 - **Bias is automatic.** A convolution right before `BatchNorm2D` has none; any other has one.
 
 ### A detector
@@ -1052,32 +1070,32 @@ One layer per line, top to bottom, exactly as the picture flows through them:
 ```python
 model = wf.stack(
     # stem: 256 → 128
-    wf.Conv2D(16, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
 
     # 128 → 64
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=1),
 
     # 64 → 32: good for small objects
-    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=2),
     wf.feature("p3"),
 
     # 32 → 16: medium objects
-    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=2),
     wf.feature("p4"),
 
     # 16 → 8: large objects
-    wf.Conv2D(256, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(256, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.SPPF(kernel_size=5),
@@ -1119,31 +1137,35 @@ Every layer infers its input channels. Shapes below are `(channels, height, widt
 
 ### Padding
 
-Padding is always a number of pixels, never `"same"` / `"valid"` (those raise an error that suggests the number):
+Every layer with a window (convolutions and pooling) takes `padding="same"` or `padding="valid"`:
 
-| `padding=` | Meaning |
-|---|---|
-| `0` | none (the old "valid") |
-| `1`, `2`, ... | that many pixels on every side |
-| `(ph, pw)` | `ph` top and bottom, `pw` left and right |
-| `(top, bottom, left, right)` | asymmetric |
+| `padding=` | Meaning | Output size (per axis) |
+|---|---|---|
+| `"valid"` (default) | no padding: the window only visits real pixels, so the picture shrinks | `⌊(size − dilation·(kernel − 1) − 1) / stride⌋ + 1` |
+| `"same"` | pads just enough to keep the size; with a stride, the size is divided by the stride and rounded up | `⌈size / stride⌉` |
 
-Output size along one axis: `⌊(size + pad_before + pad_after − dilation·(kernel − 1) − 1) / stride⌋ + 1`.
-For stride 1, `padding = kernel_size // 2` keeps the size (odd kernels).
+How `"same"` pads: with an odd kernel (3, 5, 7, ...) it adds `(kernel − 1) / 2` pixels on every side, exactly like the
+classic "padding 1 for a 3×3"; with an even kernel the extra pixel goes on the bottom and right. Padding is worked out
+for each input size, so a model built at 640×640 also runs at 416×416. Numbers (`padding=1`) are not accepted: the
+error tells you which name to use.
 
 ### Convolutions
 
+The first argument is always **`out_channels`**: how many channels come *out* (how many different patterns the layer
+looks for). Input channels are never written: Workflow works them out from the previous layer.
+
 | Layer | Signature | Output channels | Notes |
 |---|---|---|---|
-| `Conv2D` | `Conv2D(filters, kernel_size=3, stride=1, padding=0)` | `filters` | standard convolution |
-| `DilatedConv2D` | `DilatedConv2D(filters, kernel_size=3, dilation=2, stride=1, padding=0)` | `filters` | taps spread `dilation` pixels apart; `padding=dilation` keeps the size for kernel 3 |
-| `DepthwiseConv2D` | `DepthwiseConv2D(kernel_size=3, stride=1, padding=0)` | same as input | one filter per channel |
-| `PointwiseConv2D` | `PointwiseConv2D(filters)` | `filters` | 1×1 convolution, keeps the resolution |
-| `SeparableConv2D` | `SeparableConv2D(filters, kernel_size=3, stride=1, padding=0)` | `filters` | depthwise then pointwise |
-| `TransposeConv2D` | `TransposeConv2D(filters, kernel_size=2, stride=2, padding=0)` | `filters` | upsampling convolution; output `(size − 1)·stride − 2·padding + kernel`. Symmetric padding only |
+| `Conv2D` | `Conv2D(out_channels, kernel_size=3, stride=1, padding="valid")` | `out_channels` | standard convolution |
+| `DilatedConv2D` | `DilatedConv2D(out_channels, kernel_size=3, dilation=2, stride=1, padding="valid")` | `out_channels` | taps spread `dilation` pixels apart; `"same"` keeps the size |
+| `DepthwiseConv2D` | `DepthwiseConv2D(kernel_size=3, stride=1, padding="valid")` | same as input | one filter per channel |
+| `PointwiseConv2D` | `PointwiseConv2D(out_channels)` | `out_channels` | 1×1 convolution: kernel 1, stride 1, no padding (fixed) |
+| `SeparableConv2D` | `SeparableConv2D(out_channels, kernel_size=3, stride=1, padding="valid")` | `out_channels` | depthwise then pointwise |
+| `TransposeConv2D` | `TransposeConv2D(out_channels, kernel_size=2, stride=2, padding="valid")` | `out_channels` | upsampling convolution: `"valid"` gives `(size − 1)·stride + kernel`, `"same"` gives `size·stride` (needs `kernel_size ≥ stride`) |
 
-Requirements: `filters` ≥ 1; `kernel_size`, `stride`, `dilation` pairs ≥ 1; `padding` ≥ 0. If the kernel does not fit
-the (padded) input the error says how big each one is. Weights are initialised uniformly in ±1/√fan_in.
+Requirements: `out_channels` ≥ 1; `kernel_size`, `stride`, `dilation` ≥ 1 (an int, or `(height, width)`). If the kernel
+does not fit the input (with `"valid"`), the error says how big each one is and suggests `"same"`. Weights are
+initialised uniformly in ±1/√fan_in.
 
 ### Normalisation and activations
 
@@ -1155,30 +1177,38 @@ the (padded) input the error says how big each one is. Weights are initialised u
 
 ### Pooling and resizing
 
-| Layer | Signature | Notes |
+Pooling slides a window over the picture and keeps one number per window. No weights are learned.
+
+| Layer | Signature | Keeps |
 |---|---|---|
-| `MaxPool2D` | `MaxPool2D(kernel_size=2, stride=None, padding=0)` | `stride` defaults to `kernel_size`; padding at most half the kernel |
-| `AvgPool2D` | `AvgPool2D(kernel_size=2, stride=None, padding=0)` | same rules |
-| `Upsample` | `Upsample(scale=2)` | nearest neighbour, integer factor |
+| `MaxPool2D` | `MaxPool2D(kernel_size=2, stride=None, padding="valid")` | the largest value in each window |
+| `MinPool2D` | `MinPool2D(kernel_size=2, stride=None, padding="valid")` | the smallest value in each window |
+| `AvgPool2D` | `AvgPool2D(kernel_size=2, stride=None, padding="valid")` | the average of each window |
+| `Upsample` | `Upsample(scale=2)` | (not a pool) makes the picture `scale` times bigger by copying pixels (nearest neighbour) |
+
+- `stride` defaults to `kernel_size`, so `MaxPool2D(2)` halves the picture.
+- `padding="same"` with `stride=1` keeps the size: `MaxPool2D(kernel_size=5, stride=1, padding="same")` is the
+  pooling used inside `SPPF`.
+- Padded pixels never win a max or a min. In an average they count as zero.
 
 ---
 
 ## Blocks
 
-Reusable architecture blocks. `filters` defaults to the input channel count wherever it is optional.
+Reusable architecture blocks. `out_channels` defaults to the input channel count wherever it is optional.
 
 | Block | Signature | Output | What it does |
 |---|---|---|---|
-| `Bottleneck` | `Bottleneck(filters=None, kernel_size=3, stride=1, reduction=2, shortcut=True)` | `(filters, H/stride, W/stride)` | 1×1 reduce to `filters/reduction` → k×k spatial → 1×1 expand, each Conv-BN(-SiLU); the input is added back (directly, or through a 1×1 projection when channels or stride change), then SiLU |
-| `CSP` | `CSP(filters=None, n=1, shortcut=True)` | `(filters, H, W)` | splits into two 1×1 paths, runs `n` Bottlenecks on one, concatenates, fuses with a 1×1 |
-| `SPP` | `SPP(filters=None, kernels=(5, 9, 13))` | `(filters, H, W)` | 1×1 to half the channels, parallel max-pools of each size, concatenated with the input, 1×1 |
-| `SPPF` | `SPPF(filters=None, kernel_size=5)` | `(filters, H, W)` | the fast SPP: three chained max-pools of one size (same receptive fields, cheaper) |
+| `Bottleneck` | `Bottleneck(out_channels=None, kernel_size=3, stride=1, reduction=2, shortcut=True)` | `(out_channels, ⌈H/stride⌉, ⌈W/stride⌉)` | 1×1 reduce to `out_channels/reduction` → k×k spatial → 1×1 expand, each Conv-BN(-SiLU); the input is added back (directly, or through a 1×1 projection when channels or stride change), then SiLU |
+| `CSP` | `CSP(out_channels=None, n=1, shortcut=True)` | `(out_channels, H, W)` | splits into two 1×1 paths, runs `n` Bottlenecks on one, concatenates, fuses with a 1×1 |
+| `SPP` | `SPP(out_channels=None, kernels=(5, 9, 13))` | `(out_channels, H, W)` | 1×1 to half the channels, parallel max-pools of each size, concatenated with the input, 1×1 |
+| `SPPF` | `SPPF(out_channels=None, kernel_size=5)` | `(out_channels, H, W)` | the fast SPP: three chained max-pools of one size (same receptive fields, cheaper) |
 | `SE` | `SE(reduction=16)` | same | squeeze-and-excitation: global average → 1×1 (channels/reduction) → ReLU → 1×1 → sigmoid, scales each channel |
 | `CBAM` | `CBAM(reduction=16, kernel_size=7)` | same | channel attention (average- and max-pooled through a shared MLP) then spatial attention (k×k conv over the channel mean and max) |
-| `Focus` | `Focus(filters, kernel_size=3)` | `(filters, H/2, W/2)` | every 2×2 pixel block becomes 4 channels (nothing is lost), then Conv-BN-SiLU; needs an even height and width |
+| `Focus` | `Focus(out_channels, kernel_size=3)` | `(out_channels, H/2, W/2)` | every 2×2 pixel block becomes 4 channels (nothing is lost), then Conv-BN-SiLU; needs an even height and width |
 
-Requirements: kernels of `Bottleneck`, `CBAM`, `SPP` and `SPPF` must be odd (they keep the size by padding
-`kernel_size//2`); `n`, `reduction` ≥ 1.
+Every block pads with `"same"` internally, so the picture keeps its size whatever the kernel (odd kernels such as 3
+and 5 are the usual choice). `n` and `reduction` must be at least 1.
 
 `Bottleneck` is a real bottleneck, not a container: the three convolutions are fixed by its arguments, and the
 shortcut is matched automatically, so the two paths always have the same shape.
@@ -1207,12 +1237,12 @@ when one is close), and a duplicate name is an error.
 
 ```python
 model = wf.stack(
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.feature("p3"),                  # 1/2 size, 32 channels
 
-    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.feature("p4"),                  # 1/4 size, 64 channels
@@ -1247,7 +1277,7 @@ the projection to add:
 ```
 layer 2 (Residual): Residual cannot add its two paths.
   why: the layers output (16, 15, 15) but the shortcut carries (8, 30, 30); addition needs identical shapes.
-  fix: keep the shape inside the block (same channels, stride 1, padding k//2), or project the input with
+  fix: keep the shape inside the block (same channels, stride 1, padding='same'), or project the input with
        shortcut=wf.Conv2D(16, kernel_size=1, stride=2).
 ```
 
@@ -1656,7 +1686,20 @@ All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webc
 
 ---
 
-## Changes in 0.2
+## Changes
+
+### 0.3
+
+| 0.2 | 0.3 |
+|---|---|
+| `wf.Conv2D(filters, ...)` (and the other convolutions and blocks) | `wf.Conv2D(out_channels, ...)`: same position, clearer name |
+| `padding=1`, `padding=0`, `padding=(t, b, l, r)` | `padding="same"` or `padding="valid"` |
+| `MaxPool2D`, `AvgPool2D` | plus `MinPool2D`; all three take `kernel_size`, `stride`, `padding="same"`/`"valid"` |
+
+Models saved by 0.2 still load and behave the same: their numeric padding and `filters=` are read as before.
+Odd kernels with `"same"` pad exactly like the old `padding=kernel_size//2`.
+
+### 0.2
 
 Workflow 0.2 replaces PyTorch with its own engine and adopts a simpler API.
 
@@ -1665,7 +1708,7 @@ Workflow 0.2 replaces PyTorch with its own engine and adopts a simpler API.
 | 0.1 | 0.2 |
 |---|---|
 | `wf.Model(wf.Stage("p1", ...), ...)` | `wf.stack(...)`; named tensors come from `wf.feature("p1")` |
-| `wf.Conv2D(in_channels, out_channels, k)` | `wf.Conv2D(filters, kernel_size=k)`; input channels are inferred |
+| `wf.Conv2D(in_channels, out_channels, k)` | `wf.Conv2D(out_channels, kernel_size=k)`; input channels are inferred |
 | `wf.BatchNorm2D(channels)` | `wf.BatchNorm2D()` |
 | `wf.FPN(inputs=(...), channels=..., outputs=(...))` | `wf.FPN("p3", "p4", channels=...)`; returns a pyramid |
 | `wf.BBoxHead(inputs, classes, outputs)` | `wf.head(classes=...)` |

@@ -50,32 +50,32 @@ print(f"\n{data_path}: {dataset.splits}, classes {dataset.classes}\n")
 # 2. architecture: a CSP backbone, FPN + PAN neck and a detection head, all inferred -----------------
 model = wf.stack(
     # stem: 256 → 128
-    wf.Conv2D(16, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
 
     # 128 → 64
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=1),
 
     # 64 → 32: good for small objects
-    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=2),
     wf.feature("p3"),
 
     # 32 → 16: medium objects
-    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=2),
     wf.feature("p4"),
 
     # 16 → 8: large objects
-    wf.Conv2D(256, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(256, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.SPPF(kernel_size=5),

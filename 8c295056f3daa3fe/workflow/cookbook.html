@@ -123,7 +123,7 @@ felix convert coco ./roboflow-export -o data.felix</code></pre>
 <p><strong>Toddler words:</strong> line up blocks. The picture goes through them one after another, like a slide with bumps.</p>
 <p><strong>Why you'd use it:</strong> it's the model itself (the outermost one) and also any group of layers you want to treat as one. <code>input</code> is the picture size the model is built and checked for.</p>
 <pre><code>model = wf.stack(
-    wf.Conv2D(16, kernel_size=3, stride=1, padding=1),
+    wf.Conv2D(16, kernel_size=3, stride=1, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.feature("p1"),
@@ -131,21 +131,22 @@ felix convert coco ./roboflow-export -o data.felix</code></pre>
 )</code></pre>
 <p><strong>Watch out:</strong> you never say how many channels go *in* to a layer. Workflow works that out.</p>
 <h3 id="padding-used-by-every-layer-with-a-window"><code>padding</code> (used by every layer with a window)</h3>
-<p><strong>Toddler words:</strong> a cushion of empty pixels around the picture so the edges don't get squished away.</p>
-<p><strong>Why you'd use it:</strong> without padding, every 3×3 window shrinks the picture by 2 pixels. <code>padding = kernel_size // 2</code> (1 for size 3, 2 for size 5) keeps it the same size at stride 1.</p>
-<pre><code>padding=1                     # 1 pixel on every side
-padding=(1, 2)                # 1 top and bottom, 2 left and right
-padding=(0, 1, 0, 1)          # top, bottom, left, right</code></pre>
-<p><strong>Watch out:</strong> only numbers. <code>"same"</code> and <code>"valid"</code> are refused (the error tells you the number to use).</p>
+<p><strong>Toddler words:</strong> a cushion of empty pixels around the picture so the edges don't get squished away. You pick one of two words: <code>"same"</code> (put a cushion on, keep the picture the same size) or <code>"valid"</code> (no cushion, the picture shrinks a little).</p>
+<p><strong>Why you'd use it:</strong> without a cushion, every 3×3 window eats one pixel from each edge, so the picture shrinks a bit at every layer. <code>"same"</code> stops that, which keeps sizes easy to reason about: a stride-1 layer keeps the size, and a stride-2 layer exactly halves it (rounding up). Almost every layer in a detector uses <code>"same"</code>. <code>"valid"</code> (the default) is for when you *want* the picture to shrink, or want the window to only ever see real pixels.</p>
+<pre><code>wf.Conv2D(32, kernel_size=3, stride=1, padding="same")    # 256×256 in → 256×256 out
+wf.Conv2D(32, kernel_size=3, stride=2, padding="same")    # 256×256 in → 128×128 out
+wf.Conv2D(32, kernel_size=3, stride=1, padding="valid")   # 256×256 in → 254×254 out</code></pre>
+<p><strong>Watch out:</strong> numbers like <code>padding=1</code> are not accepted. The error tells you which word to use (<code>1</code> meant <code>"same"</code> for a 3×3, <code>0</code> meant <code>"valid"</code>).</p>
 <h3 id="wf-conv2d"><code>wf.Conv2D</code></h3>
-<p><strong>Toddler words:</strong> little magnifying glasses that slide over the picture, each looking for one kind of pattern (an edge, a corner, a stripe). <code>filters=32</code> means 32 different glasses.</p>
-<p><strong>Why you'd use it:</strong> it's *the* building block. Early convs find edges; later ones find parts and whole objects. <code>stride=2</code> takes big steps, halving the picture; that's how a backbone goes from big-and-shallow to small-and-deep.</p>
-<pre><code>wf.Conv2D(32, kernel_size=3, stride=1, padding=1)    # same size, 32 channels
-wf.Conv2D(64, kernel_size=3, stride=2, padding=1)    # half size, 64 channels: a "downsampling" step</code></pre>
+<p><strong>Toddler words:</strong> little magnifying glasses that slide over the picture, each looking for one kind of pattern (an edge, a corner, a stripe). The first number is <code>out_channels</code>: how many different glasses, so how many channels come *out*. <code>32</code> means 32 glasses, so 32 channels come out.</p>
+<p><strong>Why you'd use it:</strong> it's *the* building block. Early convs find edges; later ones find parts and whole objects. <code>stride=2</code> takes big steps, halving the picture; that's how a backbone goes from big-and-shallow to small-and-deep. You never write how many channels come *in*: Workflow reads that from the layer before.</p>
+<pre><code>wf.Conv2D(32, kernel_size=3, stride=1, padding="same")    # 32 channels out, same size
+wf.Conv2D(64, kernel_size=3, stride=2, padding="same")    # 64 channels out, half size: a "downsampling" step
+wf.Conv2D(out_channels=64, kernel_size=3, stride=2, padding="same")   # the same, with the name written out</code></pre>
 <h3 id="wf-depthwiseconv2d"><code>wf.DepthwiseConv2D</code></h3>
 <p><strong>Toddler words:</strong> one magnifying glass per colour channel, and each one only looks at its own channel.</p>
 <p><strong>Why you'd use it:</strong> it's very cheap. Mobile-style models use it to look around spatially for almost no cost, then mix the channels with a pointwise conv.</p>
-<pre><code>wf.DepthwiseConv2D(kernel_size=3, stride=1, padding=1)    # keeps the channel count</code></pre>
+<pre><code>wf.DepthwiseConv2D(kernel_size=3, stride=1, padding="same")    # keeps the channel count</code></pre>
 <h3 id="wf-pointwiseconv2d"><code>wf.PointwiseConv2D</code></h3>
 <p><strong>Toddler words:</strong> a 1×1 glass. It doesn't look around; it just mixes the channels at each spot.</p>
 <p><strong>Why you'd use it:</strong> changing the number of channels cheaply: squeezing before expensive work, or matching channels before an <code>add</code>.</p>
@@ -153,17 +154,18 @@ wf.Conv2D(64, kernel_size=3, stride=2, padding=1)    # half size, 64 channels: a
 <h3 id="wf-separableconv2d"><code>wf.SeparableConv2D</code></h3>
 <p><strong>Toddler words:</strong> depthwise, then pointwise: look around, then mix.</p>
 <p><strong>Why you'd use it:</strong> a drop-in for <code>Conv2D</code> that does nearly the same job for a fraction of the maths. Good for small or fast models.</p>
-<pre><code>wf.SeparableConv2D(64, kernel_size=3, stride=1, padding=1)</code></pre>
+<pre><code>wf.SeparableConv2D(64, kernel_size=3, stride=1, padding="same")</code></pre>
 <h3 id="wf-dilatedconv2d"><code>wf.DilatedConv2D</code></h3>
 <p><strong>Toddler words:</strong> a magnifying glass with gaps between its eyes, so it sees farther without costing more.</p>
 <p><strong>Why you'd use it:</strong> a bigger view (more context) without shrinking the picture or adding work. Useful late in a network or for big objects.</p>
-<pre><code>wf.DilatedConv2D(32, kernel_size=3, dilation=2, stride=1, padding=2)   # padding = dilation keeps the size for kernel 3</code></pre>
+<pre><code>wf.DilatedConv2D(32, kernel_size=3, dilation=2, stride=1, padding="same")   # sees a 5×5 area, keeps the size</code></pre>
 <h3 id="wf-transposeconv2d"><code>wf.TransposeConv2D</code></h3>
 <p><strong>Toddler words:</strong> a magnifying glass that makes the picture *bigger* (it un-squishes), and learns how.</p>
 <p><strong>Why you'd use it:</strong> growing a small, smart map back to a bigger size, for example in a neck. Unlike <code>Upsample</code>, which just copies pixels, it *learns* how to fill in the new pixels.</p>
-<pre><code>wf.TransposeConv2D(32, kernel_size=2, stride=2, padding=0)   # exactly twice the height and width</code></pre>
-<p>Output size: <code>(size − 1) × stride − 2 × padding + kernel_size</code>. With <code>kernel_size=2, stride=2, padding=0</code> that is exactly double, which is why those are the defaults. <code>kernel_size=4, stride=2, padding=1</code> also doubles and blends neighbours more smoothly.</p>
-<p><strong>Watch out:</strong> it stays float in int8 models (Workflow warns you). Use <code>Upsample</code> + <code>Conv2D</code> if everything must be int8.</p>
+<pre><code>wf.TransposeConv2D(32, kernel_size=2, stride=2, padding="valid")   # exactly twice the height and width
+wf.TransposeConv2D(32, kernel_size=4, stride=2, padding="same")    # also twice, blending neighbours more smoothly</code></pre>
+<p>Output size: with <code>"same"</code> it is exactly <code>size × stride</code>; with <code>"valid"</code> it is <code>(size − 1) × stride + kernel_size</code>. With <code>kernel_size=2, stride=2</code> both give exactly double, which is why those are the defaults.</p>
+<p><strong>Watch out:</strong> <code>"same"</code> needs <code>kernel_size</code> at least as big as <code>stride</code> (the error says so). It stays float in int8 models (Workflow warns you); use <code>Upsample</code> + <code>Conv2D</code> if everything must be int8.</p>
 <h3 id="wf-batchnorm2d"><code>wf.BatchNorm2D</code></h3>
 <p><strong>Toddler words:</strong> keeps the numbers from getting too big or too small, so learning doesn't wobble.</p>
 <p><strong>Why you'd use it:</strong> almost always right after a convolution: <code>Conv2D → BatchNorm2D → activation</code>. Models train faster and more reliably with it. The conv before it automatically drops its bias, which the BatchNorm would cancel anyway.</p>
@@ -175,11 +177,15 @@ wf.Conv2D(64, kernel_size=3, stride=2, padding=1)    # half size, 64 channels: a
 wf.LeakyReLU(slope=0.1)
 wf.SiLU()
 wf.Sigmoid()</code></pre>
-<h3 id="wf-maxpool2d-wf-avgpool2d"><code>wf.MaxPool2D</code>, <code>wf.AvgPool2D</code></h3>
-<p><strong>Toddler words:</strong> shrink the picture. Max keeps the loudest pixel in each little square; Avg keeps the average.</p>
-<p><strong>Why you'd use it:</strong> a cheap way to halve the size with no weights to learn. Max is good at keeping "is the pattern anywhere here?"; Avg smooths things out.</p>
-<pre><code>wf.MaxPool2D(kernel_size=2, stride=None, padding=0)      # stride defaults to kernel_size: half the size
-wf.AvgPool2D(kernel_size=3, stride=1, padding=1)         # same size, just smoothed</code></pre>
+<h3 id="wf-maxpool2d-wf-minpool2d-wf-avgpool2d"><code>wf.MaxPool2D</code>, <code>wf.MinPool2D</code>, <code>wf.AvgPool2D</code></h3>
+<p><strong>Toddler words:</strong> shrink the picture by looking at little squares and keeping one number from each. Max keeps the loudest pixel, Min keeps the quietest, Avg keeps the average.</p>
+<p><strong>Why you'd use it:</strong> a cheap way to make the picture smaller (or smoother) with no weights to learn.</p>
+<ul><li><strong>Max</strong> answers "is the pattern anywhere in here?". It is the usual choice, and what <code>SPPF</code> uses.</li><li><strong>Min</strong> answers "is anything *missing* or dark here?", for dark objects on light backgrounds, gaps or holes.</li><li><strong>Avg</strong> smooths things out and keeps the overall level.</li></ul>
+<pre><code>wf.MaxPool2D(kernel_size=2, stride=None, padding="valid")   # stride defaults to kernel_size: half the size
+wf.MaxPool2D(kernel_size=5, stride=1, padding="same")       # same size: every pixel becomes its 5×5 neighbourhood's max
+wf.MinPool2D(kernel_size=3, stride=2, padding="same")       # half the size, keeping the smallest values
+wf.AvgPool2D(kernel_size=3, stride=1, padding="same")       # same size, just smoothed</code></pre>
+<p><strong>Watch out:</strong> the cushion pixels from <code>"same"</code> never win a max or a min, but they count as zero in an average, so averages at the very edge come out a little darker.</p>
 <h3 id="wf-upsample"><code>wf.Upsample</code></h3>
 <p><strong>Toddler words:</strong> make the picture bigger by copying each pixel.</p>
 <p><strong>Why you'd use it:</strong> cheap resizing with nothing to learn, usually before joining a small map to a big one.</p>
@@ -189,18 +195,18 @@ wf.AvgPool2D(kernel_size=3, stride=1, padding=1)         # same size, just smoot
 <h3 id="wf-bottleneck"><code>wf.Bottleneck</code></h3>
 <p><strong>Toddler words:</strong> squeeze the picture thin (fewer channels), look around, puff it back up, then add the original back so nothing gets lost.</p>
 <p><strong>Why you'd use it:</strong> to make a network deeper without making it slow. The expensive 3×3 look-around happens on the thin version, and the added shortcut keeps learning stable in deep stacks.</p>
-<pre><code>wf.Bottleneck(filters=None, kernel_size=3, stride=1, reduction=2, shortcut=True)   # same shape out as in
-wf.Bottleneck(filters=128, kernel_size=3, stride=2, reduction=2, shortcut=True)    # wider and half size</code></pre>
-<p><strong>Watch out:</strong> when <code>filters</code> or <code>stride</code> change the shape, the shortcut gets a 1×1 projection automatically, so you never have to match the shapes yourself.</p>
+<pre><code>wf.Bottleneck(out_channels=None, kernel_size=3, stride=1, reduction=2, shortcut=True)   # same shape out as in
+wf.Bottleneck(out_channels=128, kernel_size=3, stride=2, reduction=2, shortcut=True)    # 128 channels out, half size</code></pre>
+<p><strong>Watch out:</strong> when <code>out_channels</code> or <code>stride</code> change the shape, the shortcut gets a 1×1 projection automatically, so you never have to match the shapes yourself.</p>
 <h3 id="wf-csp"><code>wf.CSP</code></h3>
 <p><strong>Toddler words:</strong> split into two paths. One does hard work (bottlenecks), one takes it easy. Then glue them together.</p>
 <p><strong>Why you'd use it:</strong> most of the accuracy of a deep stack of bottlenecks at a lot less cost. It's the standard backbone block after each downsampling conv.</p>
-<pre><code>wf.CSP(filters=None, n=1, shortcut=True)      # n = how many bottlenecks on the busy path</code></pre>
+<pre><code>wf.CSP(out_channels=None, n=1, shortcut=True)      # n = how many bottlenecks on the busy path</code></pre>
 <h3 id="wf-spp-wf-sppf"><code>wf.SPP</code>, <code>wf.SPPF</code></h3>
 <p><strong>Toddler words:</strong> look at the picture through small, medium and big windows at the same time, then glue what you saw.</p>
 <p><strong>Why you'd use it:</strong> at the end of the backbone, so the brain sees both details and the big picture. SPPF gets the same result faster with three chained small pools, so prefer it.</p>
-<pre><code>wf.SPP(filters=None, kernels=(5, 9, 13))
-wf.SPPF(filters=None, kernel_size=5)</code></pre>
+<pre><code>wf.SPP(out_channels=None, kernels=(5, 9, 13))
+wf.SPPF(out_channels=None, kernel_size=5)</code></pre>
 <h3 id="wf-se"><code>wf.SE</code></h3>
 <p><strong>Toddler words:</strong> each channel asks "am I important for *this* picture?" and turns its own volume up or down.</p>
 <p><strong>Why you'd use it:</strong> a small, cheap accuracy boost, usually after a backbone block. It learns to pay more attention to the channels that matter for the image at hand.</p>
@@ -212,7 +218,7 @@ wf.SPPF(filters=None, kernel_size=5)</code></pre>
 <h3 id="wf-focus"><code>wf.Focus</code></h3>
 <p><strong>Toddler words:</strong> cut the picture into 2×2 tiles and stack the tiles as channels: half the size, nothing thrown away.</p>
 <p><strong>Why you'd use it:</strong> as the very first layer, a fast way to shrink a big input without losing pixels.</p>
-<pre><code>wf.Focus(filters=32, kernel_size=3)</code></pre>
+<pre><code>wf.Focus(out_channels=32, kernel_size=3)</code></pre>
 <p><strong>Watch out:</strong> the input height and width must be even.</p>
 <p>---</p>
 <h2 id="part-4-workflow-wiring">Part 4 · Workflow: wiring</h2>
@@ -220,25 +226,25 @@ wf.SPPF(filters=None, kernel_size=5)</code></pre>
 <p><strong>Toddler words:</strong> do some stuff, then add what you started with. "Remember where you came from."</p>
 <p><strong>Why you'd use it:</strong> to build your own residual block. It lets very deep models train, because the brain can learn "a small change to the input" instead of a whole new picture.</p>
 <pre><code>wf.Residual(
-    wf.Conv2D(64, kernel_size=3, stride=1, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=1, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     shortcut=None,                                    # same shape in and out: add the input as it is
 )
 
 wf.Residual(
-    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
-    shortcut=wf.Conv2D(128, kernel_size=1, stride=2, padding=0),   # shape changes → project the input to match
+    shortcut=wf.Conv2D(128, kernel_size=1, stride=2, padding="valid"),   # shape changes → project the input to match
 )</code></pre>
 <p><strong>Watch out:</strong> both paths must end the same shape. If they don't, the error tells you the exact <code>shortcut=</code> to add.</p>
 <h3 id="wf-parallel"><code>wf.parallel</code></h3>
 <p><strong>Toddler words:</strong> give the same picture to several friends, then glue (or add up) their answers.</p>
 <p><strong>Why you'd use it:</strong> let the brain look at the same thing in different ways at once (small and big windows, for example), Inception-style.</p>
 <pre><code>wf.parallel(
-    wf.Conv2D(16, kernel_size=1, stride=1, padding=0),
-    wf.Conv2D(16, kernel_size=3, stride=1, padding=1),
+    wf.Conv2D(16, kernel_size=1, stride=1, padding="valid"),
+    wf.Conv2D(16, kernel_size=3, stride=1, padding="same"),
     merge="concat",                                   # or merge="add" (then the outputs must match)
 )</code></pre>
 <h3 id="wf-feature"><code>wf.feature</code></h3>
@@ -344,38 +350,38 @@ workflow devices</code></pre>
 <p>---</p>
 <h2 id="part-6-recipes-how-the-pieces-fit">Part 6 · Recipes: how the pieces fit</h2>
 <p><strong>A downsampling step</strong> (the most common pattern in a backbone): three lines that halve the picture and add channels. You'll see it again and again in the detector below.</p>
-<pre><code>wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+<pre><code>wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
 wf.BatchNorm2D(),
 wf.SiLU(),</code></pre>
 <p><strong>A small detector</strong>: the backbone halves the picture five times, naming three depths with <code>wf.feature</code>; SPPF widens the view; FPN + PAN mix the named maps; the head finds the boxes.</p>
 <pre><code>model = wf.stack(
     # stem: 256 → 128
-    wf.Conv2D(16, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
 
     # 128 → 64
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=1),
 
     # 64 → 32: good for small objects
-    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=2),
     wf.feature("p3"),
 
     # 32 → 16: medium objects
-    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=2),
     wf.feature("p4"),
 
     # 16 → 8: large objects
-    wf.Conv2D(256, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(256, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.SPPF(kernel_size=5),
@@ -395,7 +401,7 @@ model.train(data.train, validation=data.val, epochs=55, quantization=wf.QAT(prec
 model.export(format="nbm", output="detector-int8.nbm", precision="int8")</code></pre>
 <p><strong>A cheaper backbone block</strong> (mobile-style): look around cheaply, mix, add back:</p>
 <pre><code>wf.Residual(
-    wf.DepthwiseConv2D(kernel_size=3, stride=1, padding=1),
+    wf.DepthwiseConv2D(kernel_size=3, stride=1, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.PointwiseConv2D(64),

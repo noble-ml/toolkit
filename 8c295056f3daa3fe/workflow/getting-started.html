@@ -18,48 +18,48 @@ th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
 </style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="cookbook.html">Cookbook</a><a href="getting-started.html" class="on">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="composition.html">Composition</a><a href="model.html">Model</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="evaluation.html">Evaluation</a><a href="quantization.html">Quantisation</a><a href="devices.html">Devices</a><a href="errors.html">Errors</a><a href="cli.html">CLI</a><a href="changes.html">Changes</a></nav><h1 id="getting-started">Getting started</h1>
 <p>The quickest start is <code>workflow init</code>: it writes a notebook with a small model, benchmarks before and after training, and saving, that runs as-is (<a href="cli.html#init">CLI</a>). This page explains the pieces.</p>
-<p>A model is a <strong>stack</strong> of layers. Each layer receives the previous layer's output, so the only numbers you write are the ones you decide: filters, kernel sizes, strides, padding.</p>
+<p>A model is a <strong>stack</strong> of layers. Each layer receives the previous layer's output, so the only numbers you write are the ones you decide: output channels, kernel sizes, strides, padding.</p>
 <pre><code>import workflow as wf
 
 model = wf.stack(
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.Bottleneck(),
     input=(3, 640, 640),
 )
 model.summary()</code></pre>
-<ul><li><strong>Input channels are inferred.</strong> <code>wf.Conv2D(32, kernel_size=3)</code> works out how many channels it receives.</li><li><strong>Shapes are checked before anything runs.</strong> The first use of a model builds it for <code>input=</code> (default 3×640×640) and validates every layer.</li><li><strong>Padding is explicit.</strong> <code>padding=1</code> adds one pixel on each side; there is no <code>"same"</code>. For stride 1, <code>padding=kernel_size//2</code> keeps the size.</li><li><strong>Bias is automatic.</strong> A convolution right before <code>BatchNorm2D</code> has none; any other has one.</li></ul>
+<ul><li><strong>The first number is the output channels.</strong> In <code>wf.Conv2D(32, kernel_size=3)</code>, 32 channels come out; the input channels are worked out from the previous layer.</li><li><strong>Shapes are checked before anything runs.</strong> The first use of a model builds it for <code>input=</code> (default 3×640×640) and validates every layer.</li><li><strong>Padding is a word.</strong> <code>padding="same"</code> keeps the size (with <code>stride=2</code> it halves it); <code>padding="valid"</code> adds none, so the picture shrinks a little.</li><li><strong>Bias is automatic.</strong> A convolution right before <code>BatchNorm2D</code> has none; any other has one.</li></ul>
 <h2 id="a-detector">A detector</h2>
 <p>One layer per line, top to bottom, exactly as the picture flows through them:</p>
 <pre><code>model = wf.stack(
     # stem: 256 → 128
-    wf.Conv2D(16, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
 
     # 128 → 64
-    wf.Conv2D(32, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=1),
 
     # 64 → 32: good for small objects
-    wf.Conv2D(64, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=2),
     wf.feature("p3"),
 
     # 32 → 16: medium objects
-    wf.Conv2D(128, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.CSP(n=2),
     wf.feature("p4"),
 
     # 16 → 8: large objects
-    wf.Conv2D(256, kernel_size=3, stride=2, padding=1),
+    wf.Conv2D(256, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.SPPF(kernel_size=5),
