@@ -102,7 +102,7 @@ Why the flags: `--no-index` keeps pip from installing the unrelated public packa
 ### Colab / notebooks
 
 ```
-!pip install BASE_URL/files/felix-0.4.2-py3-none-any.whl BASE_URL/files/workflow-0.3.5-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.4.2-py3-none-any.whl BASE_URL/files/workflow-0.3.6-py3-none-any.whl
 ```
 
 Direct wheel URLs need no flags; pip fetches the dependencies from PyPI. Colab GPUs work with `device="cuda"`.
@@ -848,6 +848,14 @@ model.train(data.train, validation=data.val, epochs=50, batch_size=16, lr=1e-3, 
             quantization=None, augment=True, ema=True)
 ```
 
+While it learns you see a bar, plus a table that gains a line every epoch: the training loss, the validation loss
+(how wrong it is on pictures it doesn't learn from) and the mAP scores. If the training loss keeps falling but the
+validation loss rises, the brain is memorising instead of learning.
+
+While it learns you see a bar, plus a table that gains a line every epoch: the training loss, the validation loss
+(how wrong it is on pictures it doesn't learn from) and the mAP scores. If the training loss keeps falling but the
+validation loss starts rising, the brain is memorising the training pictures instead of learning.
+
 **Watch out:** `epochs` means "train *until* epoch N". To continue a model that reached 50, ask for `epochs=80` to get
 30 more; `epochs=30` would do nothing.
 
@@ -1553,13 +1561,35 @@ own splits are used.
 | `quiet` | False | hide the progress panel |
 
 Returns the history: one dict per epoch (`epoch`, `loss`, `box`, `obj`, `cls`, `lr`, `seconds`, and with validation
-`map50`, `map50_95`, `precision`, `recall`, `f1`, `fitness`). It is also kept in `model.history`.
+`val_loss`, `val_box`, `val_obj`, `val_cls`, `map50`, `map50_95`, `precision`, `recall`, `f1`, `fitness`). It is also kept in `model.history`.
 
 ### Progress
 
-Training shows a live panel: a bar per run, the epoch and step, the loss parts, the learning rate, and after each
-epoch the validation mAP, the best epoch and the speed. In a terminal it redraws in place; in a notebook (Jupyter,
-VS Code, Colab) it redraws in the cell's output, about twice a second. `quiet=True` hides it.
+Training shows a live panel. In a terminal it redraws in place; in a notebook (Jupyter, VS Code, Colab) it redraws in
+the cell's output, about twice a second. `quiet=True` hides it.
+
+- **The bar**: epoch and step, and the running *training* loss of the current epoch with its parts (box, obj, cls) and the
+  learning rate.
+- **After each epoch**, a line is added to a table under the bar:
+
+```
+epoch   train loss   val loss   mAP50   mAP50-95
+    1        7.963     14.018   0.000      0.000
+    2        3.718     14.239   0.000      0.000
+    3        3.099     13.865   0.000      0.000
+    4        2.664      9.462   0.017      0.011
+    5        2.497      4.697   0.585      0.191  ← best
+```
+
+The **validation loss** is the same loss as training (box + confidence + class), measured on the validation pictures
+with the weights that get saved (the moving average, when `ema=True`). Early on it is often higher than the training
+loss, because that average lags behind the newest weights; it catches up as training settles. The table shows the
+latest 15 epochs (continued runs include the earlier ones); every epoch is in `model.history`, e.g.:
+
+```python
+for r in model.history:
+    print(r["epoch"], r["loss"], r["val_loss"], r["map50_95"])
+```
 
 ### Defaults
 
