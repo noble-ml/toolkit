@@ -49,6 +49,8 @@ print(f"\n{data_path}: {dataset.splits}, classes {dataset.classes}\n")
 
 # 2. architecture: a CSP backbone, FPN + PAN neck and a detection head, all inferred -----------------
 model = wf.stack(
+    wf.input(channels=3, height=SIZE, width=SIZE),
+
     # stem: 256 → 128
     wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
@@ -85,8 +87,6 @@ model = wf.stack(
     wf.FPN("p3", "p4", "p5", channels=64),
     wf.PAN(channels=64),
     wf.head(classes=len(dataset.classes)),
-
-    input=(3, SIZE, SIZE),
 )
 model.summary()
 model.export_graph(os.path.join(args.out, "architecture.png"))

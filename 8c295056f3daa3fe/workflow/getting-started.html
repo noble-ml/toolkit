@@ -22,17 +22,20 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 <pre><code>import workflow as wf
 
 model = wf.stack(
+    wf.input(channels=3, height=640, width=640),
+
     wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.Bottleneck(),
-    input=(3, 640, 640),
 )
 model.summary()</code></pre>
-<ul><li><strong>The first number is the output channels.</strong> In <code>wf.Conv2D(32, kernel_size=3)</code>, 32 channels come out; the input channels are worked out from the previous layer.</li><li><strong>Shapes are checked before anything runs.</strong> The first use of a model builds it for <code>input=</code> (default 3×640×640) and validates every layer.</li><li><strong>Padding is a word.</strong> <code>padding="same"</code> keeps the size (with <code>stride=2</code> it halves it); <code>padding="valid"</code> adds none, so the picture shrinks a little.</li><li><strong>Bias is automatic.</strong> A convolution right before <code>BatchNorm2D</code> has none; any other has one.</li></ul>
+<ul><li><strong>The first number is the output channels.</strong> In <code>wf.Conv2D(32, kernel_size=3)</code>, 32 channels come out; the input channels are worked out from the previous layer.</li><li><strong>The first line says what goes in.</strong> <code>wf.input(channels=3, height=640, width=640)</code> builds the model for RGB pictures of that size and checks every layer before anything runs (3×640×640 if you leave it out).</li><li><strong>Padding is a word.</strong> <code>padding="same"</code> keeps the size (with <code>stride=2</code> it halves it); <code>padding="valid"</code> adds none, so the picture shrinks a little.</li><li><strong>Bias is automatic.</strong> A convolution right before <code>BatchNorm2D</code> has none; any other has one.</li></ul>
 <h2 id="a-detector">A detector</h2>
 <p>One layer per line, top to bottom, exactly as the picture flows through them:</p>
 <pre><code>model = wf.stack(
+    wf.input(channels=3, height=256, width=256),
+
     # stem: 256 → 128
     wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
@@ -69,8 +72,6 @@ model.summary()</code></pre>
     wf.FPN("p3", "p4", "p5", channels=64),
     wf.PAN(channels=64),
     wf.head(classes=3),
-
-    input=(3, 256, 256),
 )</code></pre>
 <h2 id="train-evaluate-use">Train, evaluate, use</h2>
 <pre><code>import felix as fx

@@ -119,15 +119,25 @@ felix unpack dataset.felix -o ./dataset
 felix convert coco ./roboflow-export -o data.felix</code></pre>
 <p>---</p>
 <h2 id="part-2-workflow-the-brain-s-building-blocks">Part 2 · Workflow: the brain's building blocks</h2>
+<h3 id="wf-input"><code>wf.input</code></h3>
+<p><strong>Toddler words:</strong> the front door of the brain. It says what kind of pictures come in: how many colour channels (3 for red, green and blue) and how big.</p>
+<p><strong>Why you'd use it:</strong> Workflow builds the whole model from it. It works out how many channels reach every layer, makes the weights the right size, and checks that every layer fits *before* anything trains. It is also the size pictures are resized to for training and prediction, unless you ask for another. It always goes on the very first line, because that's where the picture comes in.</p>
+<pre><code>model = wf.stack(
+    wf.input(channels=3, height=256, width=256),
+    wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
+    ...
+)</code></pre>
+<p><strong>Watch out:</strong> only one, only at the top of the outermost <code>wf.stack</code> (blocks like <code>wf.Residual</code> take their input from the layer before them). Leave it out and Workflow assumes 3 × 640 × 640. A trained model can still predict at other sizes with <code>img_size=</code>.</p>
 <h3 id="wf-stack"><code>wf.stack</code></h3>
 <p><strong>Toddler words:</strong> line up blocks. The picture goes through them one after another, like a slide with bumps.</p>
-<p><strong>Why you'd use it:</strong> it's the model itself (the outermost one) and also any group of layers you want to treat as one. <code>input</code> is the picture size the model is built and checked for.</p>
+<p><strong>Why you'd use it:</strong> it's the model itself (the outermost one) and also any group of layers you want to treat as one. Its first line is <code>wf.input(...)</code>, then one layer per line.</p>
 <pre><code>model = wf.stack(
+    wf.input(channels=3, height=640, width=640),
+
     wf.Conv2D(16, kernel_size=3, stride=1, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.feature("p1"),
-    input=(3, 640, 640),
 )</code></pre>
 <p><strong>Watch out:</strong> you never say how many channels go *in* to a layer. Workflow works that out.</p>
 <h3 id="padding-used-by-every-layer-with-a-window"><code>padding</code> (used by every layer with a window)</h3>
@@ -355,6 +365,8 @@ wf.BatchNorm2D(),
 wf.SiLU(),</code></pre>
 <p><strong>A small detector</strong>: the backbone halves the picture five times, naming three depths with <code>wf.feature</code>; SPPF widens the view; FPN + PAN mix the named maps; the head finds the boxes.</p>
 <pre><code>model = wf.stack(
+    wf.input(channels=3, height=256, width=256),
+
     # stem: 256 → 128
     wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
@@ -391,8 +403,6 @@ wf.SiLU(),</code></pre>
     wf.FPN("p3", "p4", "p5", channels=64),
     wf.PAN(channels=64),
     wf.head(classes=3),
-
-    input=(3, 256, 256),
 )</code></pre>
 <p><strong>Train, then shrink for deployment:</strong></p>
 <pre><code>model.train(data.train, validation=data.val, epochs=50)

@@ -33,6 +33,8 @@ import workflow as wf
 data = fx.load("shapes.felix")
 
 model = wf.stack(
+    wf.input(channels=3, height=640, width=640),
+
     wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
@@ -68,7 +70,7 @@ fit, the error says **what** happened, **why**, and **how to fix it**, naming th
 - **Layers**: `Conv2D`, `DepthwiseConv2D`, `PointwiseConv2D`, `SeparableConv2D`, `TransposeConv2D`, `DilatedConv2D`,
   `BatchNorm2D`, `ReLU`, `LeakyReLU`, `SiLU`, `Sigmoid`, `MaxPool2D`, `AvgPool2D`, `Upsample`.
 - **Blocks**: `Bottleneck`, `CSP`, `SPP`, `SPPF`, `SE`, `CBAM`, `Focus`.
-- **Composition**: `wf.stack`, `wf.Residual`, `wf.parallel`, `wf.feature`, `wf.concat`, `wf.add`, `wf.FPN`, `wf.PAN`, `wf.head`.
+- **Composition**: `wf.input`, `wf.stack`, `wf.Residual`, `wf.parallel`, `wf.feature`, `wf.concat`, `wf.add`, `wf.FPN`, `wf.PAN`, `wf.head`.
 - **Training**: one call with sensible defaults (AdamW, warm-up + cosine, GIoU + BCE loss, EMA, early stopping,
   `.nbm` checkpoints, safe Ctrl+C, continuing from a saved model).
 - **Evaluation**: `wf.eval(model)` (size, FLOPs, latency, FPS, memory) and `wf.eval(model, dataset=val)` (accuracy).
@@ -412,20 +414,43 @@ felix convert coco ./roboflow-export -o data.felix
 
 ### Part 2 · Workflow: the brain's building blocks
 
+#### `wf.input`
+
+**Toddler words:** the front door of the brain. It says what kind of pictures come in: how many colour channels
+(3 for red, green and blue) and how big.
+
+**Why you'd use it:** Workflow builds the whole model from it. It works out how many channels reach every layer,
+makes the weights the right size, and checks that every layer fits *before* anything trains. It is also the size
+pictures are resized to for training and prediction, unless you ask for another. It always goes on the very first
+line, because that's where the picture comes in.
+
+```python
+model = wf.stack(
+    wf.input(channels=3, height=256, width=256),
+    wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
+    ...
+)
+```
+
+**Watch out:** only one, only at the top of the outermost `wf.stack` (blocks like `wf.Residual` take their input from
+the layer before them). Leave it out and Workflow assumes 3 × 640 × 640. A trained model can still predict at other
+sizes with `img_size=`.
+
 #### `wf.stack`
 
 **Toddler words:** line up blocks. The picture goes through them one after another, like a slide with bumps.
 
 **Why you'd use it:** it's the model itself (the outermost one) and also any group of layers you want to treat as
-one. `input` is the picture size the model is built and checked for.
+one. Its first line is `wf.input(...)`, then one layer per line.
 
 ```python
 model = wf.stack(
+    wf.input(channels=3, height=640, width=640),
+
     wf.Conv2D(16, kernel_size=3, stride=1, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.feature("p1"),
-    input=(3, 640, 640),
 )
 ```
 
@@ -970,6 +995,8 @@ widens the view; FPN + PAN mix the named maps; the head finds the boxes.
 
 ```python
 model = wf.stack(
+    wf.input(channels=3, height=256, width=256),
+
     # stem: 256 → 128
     wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
@@ -1006,8 +1033,6 @@ model = wf.stack(
     wf.FPN("p3", "p4", "p5", channels=64),
     wf.PAN(channels=64),
     wf.head(classes=3),
-
-    input=(3, 256, 256),
 )
 ```
 
@@ -1046,19 +1071,20 @@ are the ones you decide: output channels, kernel sizes, strides, padding.
 import workflow as wf
 
 model = wf.stack(
+    wf.input(channels=3, height=640, width=640),
+
     wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
     wf.Bottleneck(),
-    input=(3, 640, 640),
 )
 model.summary()
 ```
 
 - **The first number is the output channels.** In `wf.Conv2D(32, kernel_size=3)`, 32 channels come out; the input
   channels are worked out from the previous layer.
-- **Shapes are checked before anything runs.** The first use of a model builds it for `input=` (default 3×640×640)
-  and validates every layer.
+- **The first line says what goes in.** `wf.input(channels=3, height=640, width=640)` builds the model for RGB
+  pictures of that size and checks every layer before anything runs (3×640×640 if you leave it out).
 - **Padding is a word.** `padding="same"` keeps the size (with `stride=2` it halves it); `padding="valid"` adds none,
   so the picture shrinks a little.
 - **Bias is automatic.** A convolution right before `BatchNorm2D` has none; any other has one.
@@ -1069,6 +1095,8 @@ One layer per line, top to bottom, exactly as the picture flows through them:
 
 ```python
 model = wf.stack(
+    wf.input(channels=3, height=256, width=256),
+
     # stem: 256 → 128
     wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
@@ -1105,8 +1133,6 @@ model = wf.stack(
     wf.FPN("p3", "p4", "p5", channels=64),
     wf.PAN(channels=64),
     wf.head(classes=3),
-
-    input=(3, 256, 256),
 )
 ```
 
@@ -1219,7 +1245,7 @@ shortcut is matched automatically, so the two paths always have the same shape.
 
 | Function | Meaning |
 |---|---|
-| `wf.stack(*layers, input=None)` | layers in order. The outermost stack is the model; `input` is `(C, H, W)`, default `(3, 640, 640)` |
+| `wf.stack(wf.input(*None), *layers)` | layers in order. The outermost stack is the model; `input` is `(C, H, W)`, default `(3, 640, 640)` |
 | `wf.Residual(*layers, shortcut=None)` | `layers(x) + x`. With `shortcut=` (a layer or list) the input is projected first. Both paths must end with the same shape |
 | `wf.parallel(*branches, merge="concat")` | every branch receives the same input; results are concatenated along channels or summed (`merge="add"`) |
 | `wf.feature("name")` | registers the current tensor under a name and passes it on unchanged. After a pyramid, give one name per map: `wf.feature(("n3", "n4", "n5"))` |
@@ -1237,6 +1263,8 @@ when one is close), and a duplicate name is an error.
 
 ```python
 model = wf.stack(
+    wf.input(channels=3, height=256, width=256),
+
     wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
@@ -1248,11 +1276,10 @@ model = wf.stack(
     wf.feature("p4"),                  # 1/4 size, 64 channels
 
     wf.PointwiseConv2D(32),
-    wf.Upsample(2),
+    wf.Upsample(scale=2),
     wf.feature("up"),                  # back to 1/2 size
 
     wf.concat("p3", "up"),             # 32 + 32 = 64 channels at 1/2 size
-    input=(3, 256, 256),
 )
 ```
 
@@ -1289,7 +1316,7 @@ The outermost `wf.stack(...)` is the model.
 
 | Member | What it does |
 |---|---|
-| `model.summary(input=None)` | table of every layer's output shape, parameters and MACs; totals for parameters (trainable / non-trainable), size and GFLOPs. Returns the totals |
+| `model.summary(input=None)` (`input=(3, 416, 416)` checks another size) | table of every layer's output shape, parameters and MACs; totals for parameters (trainable / non-trainable), size and GFLOPs. Returns the totals |
 | `model.output_shape` | the output shape (a list of shapes for a pyramid / head) |
 | `model.check(input)` | output shape for another input size, or a ShapeError |
 | `model.count_parameters()` | `(trainable, non_trainable)` |
@@ -1695,8 +1722,10 @@ All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webc
 | `wf.Conv2D(filters, ...)` (and the other convolutions and blocks) | `wf.Conv2D(out_channels, ...)`: same position, clearer name |
 | `padding=1`, `padding=0`, `padding=(t, b, l, r)` | `padding="same"` or `padding="valid"` |
 | `MaxPool2D`, `AvgPool2D` | plus `MinPool2D`; all three take `kernel_size`, `stride`, `padding="same"`/`"valid"` |
+| `wf.stack(..., input=(3, 640, 640))` at the bottom | `wf.input(channels=3, height=640, width=640)` as the first line of the stack |
 
-Models saved by 0.2 still load and behave the same: their numeric padding and `filters=` are read as before.
+Models saved by 0.2 or an earlier 0.3 build still load and behave the same: their numeric padding, `filters=` and
+`input=` are read as before.
 Odd kernels with `"same"` pad exactly like the old `padding=kernel_size//2`.
 
 ### 0.2
