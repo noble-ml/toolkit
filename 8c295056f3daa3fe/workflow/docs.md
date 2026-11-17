@@ -59,7 +59,7 @@ model.train(data.train, validation=data.val, epochs=100, device="cuda")
 wf.eval(model, dataset=data.test)                 # mAP50, mAP50-95, precision, recall, FLOPs, FPS
 model.train(data.train, validation=data.val, epochs=110, quantization=wf.QAT(precision="int8"))
 model.export(format="nbm", output="detector-int8.nbm", precision="int8")
-model.predict("photo.jpg")                        # annotated image + predictions.json in results/
+wf.inference("shapes.felix", model, "results/")   # test split → original/, annotated/, predictions.json
 ```
 
 Input channels, tensor shapes, biases, parameter counts and FLOPs are worked out for you. When something doesn't
@@ -76,7 +76,8 @@ fit, the error says **what** happened, **why**, and **how to fix it**, naming th
 - **Evaluation**: `wf.eval(model)` (size, FLOPs, latency, FPS, memory) and `wf.eval(model, dataset=val)` (accuracy).
 - **Quantisation**: QAT during training, post-training quantisation, real INT8 / FP16 files.
 - **Export**: `.nbm` at any precision, ONNX (FP32, FP16, INT8 as QDQ).
-- **Inference**: `model.predict(...)` on images or batches, results saved to `results/`.
+- **Inference**: `wf.inference(source, model, output)` on an image, video, folder or Felix dataset (its test split
+  automatically), saving originals, annotated copies and `predictions.json`.
 - **Devices**: `"cpu"`, `"cuda"`, `"gpu"`, `"mps"` (experimental), `"auto"`.
 - **CLI**: `workflow init | info | predict | eval | quantize | export | script | devices`. `workflow init` writes a
   ready-to-run starter notebook.
@@ -101,7 +102,7 @@ Why the flags: `--no-index` keeps pip from installing the unrelated public packa
 ### Colab / notebooks
 
 ```
-!pip install BASE_URL/files/felix-0.4.1-py3-none-any.whl BASE_URL/files/workflow-0.3.1-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.4.1-py3-none-any.whl BASE_URL/files/workflow-0.3.2-py3-none-any.whl
 ```
 
 Direct wheel URLs need no flags; pip fetches the dependencies from PyPI. Colab GPUs work with `device="cuda"`.
@@ -914,12 +915,34 @@ model.export(format="onnx", output="detector.onnx", precision="fp32", calibratio
 model.export(format="nbm", output="detector-int8.nbm", precision="int8", calibration=data.val)
 ```
 
+#### `wf.inference`
+
+**Toddler words:** "go look at these and tell me what you see." Give it a picture, a video, a folder or a whole Felix
+dataset, plus the brain, plus a folder for the answers. It figures out what you gave it by itself.
+
+**Why you'd use it:** this is how you *use* a trained model. It keeps everything together in one folder: the
+original pictures, the same pictures with boxes drawn on, and `predictions.json` with every box. Give it a Felix
+dataset and it picks the test pile on its own (the pictures the model never trained on), unless you choose
+another pile.
+
+```python
+model = wf.load("detector.nbm")
+run = wf.inference("shapes.felix", model, "results/", split=None, confidence=0.25, iou=0.45,
+                   img_size=None, device=None, batch_size=16)
+wf.inference("holiday.mp4", model, "results/video/")         # every frame, annotated video saved
+wf.inference("photos/", model, "results/photos/")            # every image (and video) in the folder
+wf.inference(data.val, model, "results/val/")                # you pick the pile
+```
+
+**Watch out:** videos need `pip install opencv-python`. The folder can be reused: files are added, and names
+never overwrite each other.
+
 #### `model.predict`
 
-**Toddler words:** "what's in this picture?". It draws boxes and puts the pictures and a list of answers in
-`results/`.
+**Toddler words:** "what's in this picture?", answered straight back to you in Python.
 
-**Why you'd use it:** to actually use the detector, on one image, many images, or video frames.
+**Why you'd use it:** inside your own code, when you want the boxes as data and not a folder of files (for example
+in a camera loop). `wf.inference` is built on it.
 
 ```python
 r = model.predict("photo.jpg", device=None, confidence=0.25, iou=0.45, img_size=None,
@@ -969,7 +992,7 @@ workflow init detector.ipynb --dataset data.felix --img-size 256 --epochs 30 --d
 ```
 workflow init my_detector.ipynb                     # a starter notebook
 workflow info detector.nbm
-workflow predict detector.nbm photo.jpg --confidence 0.25
+workflow predict detector.nbm photo.jpg --confidence 0.25     # also videos, folders, datasets
 workflow eval detector.nbm --dataset shapes.felix --split test
 workflow quantize detector.nbm int8 --calibration shapes.felix
 workflow export detector.nbm --format onnx --precision fp32
@@ -1147,8 +1170,9 @@ wf.eval(model, dataset=data.test)
 model.save("detector.nbm")
 
 model = wf.load("detector.nbm")
-results = model.predict("photo.jpg")                 # → results/photo.png and results/predictions.json
-print(results.xyxy, results.classes, results.confidences)
+run = wf.inference("photo.jpg", model, "results/")   # → results/original/, results/annotated/, results/predictions.json
+first = run.images[0]
+print(first.xyxy, first.classes, first.confidences)
 ```
 
 Next: [Layers](#layers), [Blocks](#blocks) and [Composition](#composition) for building; [Training](#training),
@@ -1387,7 +1411,66 @@ You never configure it for ordinary training:
   binary cross-entropy for the classes, normalised by the number of positives.
 - `model.train(..., loss_weights=(box, confidence, classes))` changes the weights if you need to.
 
-### Prediction
+### Inference: `wf.inference`
+
+The normal way to use a trained model:
+
+```python
+model = wf.load("detector.nbm")
+run = wf.inference("photo.jpg", model, "results/")
+```
+
+`wf.inference(source, model, output)` works out what `source` is on its own:
+
+| `source` | What runs |
+|---|---|
+| an image (`.png`, `.jpg`, `.jpeg`, `.bmp`, `.webp`) | that image |
+| a video (`.mp4`, `.mov`, `.avi`, `.mkv`, `.webm`, ...) | every frame; the annotated copy is an `.mp4` (needs `opencv-python`) |
+| a folder | every image and video in it (not subfolders) |
+| a Felix dataset (`.felix` file or dataset folder) | its **test** split, picked automatically (val if there is no test split, everything if there are no splits) |
+| a loaded dataset or split (`data`, `data.val`, ...) | that dataset's test split, or exactly the split you pass |
+| a list of any of these | all of them |
+
+Choose a different split of a dataset with `split="val"` or `split="train"`, or by passing `data.val` yourself.
+`model` can also be the path of a `.nbm`.
+
+The output folder (created if needed) gets:
+
+```
+results/
+├── original/            the inputs, untouched (dataset images are copied byte for byte)
+├── annotated/           the same pictures with boxes and labels drawn (videos as .mp4)
+└── predictions.json     every detection, plus which files belong together
+```
+
+```json
+{"model": "detector.nbm", "classes": ["circle", "square", "triangle"], "source": "Felix dataset shapes.felix · test split (picked automatically) · 60 images",
+ "settings": {"confidence": 0.25, "iou": 0.45, "img_size": null},
+ "images": [{"image": "IMG13.png", "original": "original/IMG13.png", "annotated": "annotated/IMG13.png", "width": 256, "height": 256,
+             "detections": [{"class_id": 2, "class": "triangle", "confidence": 0.99, "xyxy": [154.1, 189.9, 198.4, 238.9]}]}],
+ "videos": [{"video": "clip.mp4", "original": "original/clip.mp4", "annotated": "annotated/clip.mp4", "fps": 30.0, "frames": 25,
+             "detections": [[...frame 1...], [...frame 2...]]}]}
+```
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `output` | `"results/"` | the folder above |
+| `split` | `None` (test) | which split of a Felix dataset |
+| `confidence` | 0.25 | minimum score |
+| `iou` | 0.45 | NMS overlap threshold |
+| `img_size` | the model's input | inference size |
+| `device` | auto | `"cpu"`, `"cuda"`, `"gpu"`, `"mps"` |
+| `batch_size` | 16 | images (or video frames) per batch |
+| `quiet` | False | hide the progress panel |
+
+It returns an `Inference`: `.images` (a `Results` for each image, see below), `.videos` (`{name: per-frame detections}`),
+`.output`, `.json` and `.json_path`. Names never collide: two inputs called `photo.png` become `photo.png` and
+`photo_2.png`. From the terminal: `workflow predict detector.nbm clip.mp4` (same rules, `--split`, `-o`).
+
+### Prediction in memory: `model.predict`
+
+`wf.inference` is built on `model.predict`, which you can call directly when you want results in Python without
+the folder of files:
 
 ```python
 model = wf.load("detector.nbm")
@@ -1395,6 +1478,7 @@ results = model.predict("image.jpg")
 results = model.predict(["image1.jpg", "image2.jpg"])
 results = model.predict("image.jpg", device="cuda", confidence=0.25, iou=0.45, img_size=640)
 results = model.predict("image.jpg", output="predictions/")
+results = model.predict(frame_rgb_array, output=None)              # nothing written: handy inside your own loop
 ```
 
 | Argument | Default | Meaning |
@@ -1665,7 +1749,7 @@ Errors carry `what`, `why`, `fix` and `where` attributes for programs that want 
 ```
 workflow init [NOTEBOOK.ipynb] [--dataset D]    starter notebook: small model, benchmarks before/after, saving
 workflow info MODEL.nbm                        classes, precision, training progress, layer summary
-workflow predict MODEL.nbm IMG [IMG ...]       detect; annotated images + predictions.json in results/
+workflow predict MODEL.nbm SOURCE [...] [--split S] [-o OUT]   images, videos, folders or a Felix dataset → results/
 workflow eval MODEL.nbm [--dataset D --split test]   size/FLOPs/FPS, plus accuracy with a dataset
 workflow quantize MODEL.nbm int8|fp16|fp32 [--calibration D] [-o OUT]   post-training quantisation
 workflow export MODEL.nbm --format onnx|nbm [--precision ...] [-o OUT]
@@ -1728,6 +1812,7 @@ All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webc
 | `wf.Conv2D(filters, ...)` (and the other convolutions and blocks) | `wf.Conv2D(out_channels, ...)`: same position, clearer name |
 | `padding=1`, `padding=0`, `padding=(t, b, l, r)` | `padding="same"` or `padding="valid"` |
 | `MaxPool2D`, `AvgPool2D` | plus `MinPool2D`; all three take `kernel_size`, `stride`, `padding="same"`/`"valid"` |
+| `model.predict(...)` as the main way to run a model | `wf.inference(source, model, output)`: images, videos, folders or Felix datasets (test split automatically), saving `original/`, `annotated/` and `predictions.json`. `model.predict` stays for in-memory use |
 | `wf.stack(..., input=(3, 640, 640))` at the bottom | `wf.input(channels=3, height=640, width=640)` as the first line of the stack |
 
 Models saved by 0.2 or an earlier 0.3 build still load and behave the same: their numeric padding, `filters=` and

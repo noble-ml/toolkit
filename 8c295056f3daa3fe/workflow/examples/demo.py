@@ -106,13 +106,11 @@ if args.qat_epochs:
     print(f"\nfp32 mAP50-95 {fp32.map50_95:.3f} → int8 (QAT) {int8.map50_95:.3f}")
 model.export(format="onnx", output=os.path.join(args.out, "detector.onnx"))
 
-# 5. inference: annotated images and predictions.json go to results/ ----------------------------------
-images = [os.path.join(args.out, f"test_{i}.png") for i in range(3)]
-for path, stem in zip(images, test.stems):
-    test.image(stem).save(path)
+# 5. inference: original/, annotated/ and predictions.json go to results/ -----------------------------
 detector = wf.load(os.path.join(args.out, "detector-int8.nbm" if args.qat_epochs else "detector.nbm"))
-results = detector.predict(images, output=os.path.join(args.out, "results"))
-for r in results:
+run = wf.inference(data_path, detector, os.path.join(args.out, "results"))     # the test split, picked automatically
+print(run)
+for r in run.images[:3]:
     print(r.path, r, [round(c, 2) for c in r.confidences])
 print(f"""
 Next, from the terminal:

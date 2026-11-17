@@ -82,6 +82,7 @@ wf.eval(model, dataset=data.test)
 model.save("detector.nbm")
 
 model = wf.load("detector.nbm")
-results = model.predict("photo.jpg")                 # → results/photo.png and results/predictions.json
-print(results.xyxy, results.classes, results.confidences)</code></pre>
+run = wf.inference("photo.jpg", model, "results/")   # → results/original/, results/annotated/, results/predictions.json
+first = run.images[0]
+print(first.xyxy, first.classes, first.confidences)</code></pre>
 <p>Next: <a href="layers.html">Layers</a>, <a href="blocks.html">Blocks</a> and <a href="composition.html">Composition</a> for building; <a href="training.html">Training</a>, <a href="evaluation.html">Evaluation</a> and <a href="quantization.html">Quantisation</a> for the rest. A full runnable example is the <a href="demo.html">Demo</a>.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

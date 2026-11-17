@@ -26,12 +26,34 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 <h2 id="default-loss">Default loss</h2>
 <p>You never configure it for ordinary training:</p>
 <ul><li>Each object is assigned to the pyramid level whose stride suits its size (up to 8× the stride); cells inside the box within 1.5 strides of its centre are positives, every object keeps at least its centre cell, and the smaller object wins where boxes overlap.</li><li>Loss = 5 × (1 − GIoU) on positive cells + binary cross-entropy for confidence (positives 1, everything else 0) + binary cross-entropy for the classes, normalised by the number of positives.</li><li><code>model.train(..., loss_weights=(box, confidence, classes))</code> changes the weights if you need to.</li></ul>
-<h2 id="prediction">Prediction</h2>
+<h2 id="inference-wf-inference">Inference: <code>wf.inference</code></h2>
+<p>The normal way to use a trained model:</p>
+<pre><code>model = wf.load("detector.nbm")
+run = wf.inference("photo.jpg", model, "results/")</code></pre>
+<p><code>wf.inference(source, model, output)</code> works out what <code>source</code> is on its own:</p>
+<table><thead><tr><th><code>source</code></th><th>What runs</th></tr></thead><tbody><tr><td>an image (<code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.bmp</code>, <code>.webp</code>)</td><td>that image</td></tr><tr><td>a video (<code>.mp4</code>, <code>.mov</code>, <code>.avi</code>, <code>.mkv</code>, <code>.webm</code>, ...)</td><td>every frame; the annotated copy is an <code>.mp4</code> (needs <code>opencv-python</code>)</td></tr><tr><td>a folder</td><td>every image and video in it (not subfolders)</td></tr><tr><td>a Felix dataset (<code>.felix</code> file or dataset folder)</td><td>its <strong>test</strong> split, picked automatically (val if there is no test split, everything if there are no splits)</td></tr><tr><td>a loaded dataset or split (<code>data</code>, <code>data.val</code>, ...)</td><td>that dataset's test split, or exactly the split you pass</td></tr><tr><td>a list of any of these</td><td>all of them</td></tr></tbody></table>
+<p>Choose a different split of a dataset with <code>split="val"</code> or <code>split="train"</code>, or by passing <code>data.val</code> yourself. <code>model</code> can also be the path of a <code>.nbm</code>.</p>
+<p>The output folder (created if needed) gets:</p>
+<pre><code>results/
+├── original/            the inputs, untouched (dataset images are copied byte for byte)
+├── annotated/           the same pictures with boxes and labels drawn (videos as .mp4)
+└── predictions.json     every detection, plus which files belong together</code></pre>
+<pre><code>{"model": "detector.nbm", "classes": ["circle", "square", "triangle"], "source": "Felix dataset shapes.felix · test split (picked automatically) · 60 images",
+ "settings": {"confidence": 0.25, "iou": 0.45, "img_size": null},
+ "images": [{"image": "IMG13.png", "original": "original/IMG13.png", "annotated": "annotated/IMG13.png", "width": 256, "height": 256,
+             "detections": [{"class_id": 2, "class": "triangle", "confidence": 0.99, "xyxy": [154.1, 189.9, 198.4, 238.9]}]}],
+ "videos": [{"video": "clip.mp4", "original": "original/clip.mp4", "annotated": "annotated/clip.mp4", "fps": 30.0, "frames": 25,
+             "detections": [[...frame 1...], [...frame 2...]]}]}</code></pre>
+<table><thead><tr><th>Argument</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td><code>output</code></td><td><code>"results/"</code></td><td>the folder above</td></tr><tr><td><code>split</code></td><td><code>None</code> (test)</td><td>which split of a Felix dataset</td></tr><tr><td><code>confidence</code></td><td>0.25</td><td>minimum score</td></tr><tr><td><code>iou</code></td><td>0.45</td><td>NMS overlap threshold</td></tr><tr><td><code>img_size</code></td><td>the model's input</td><td>inference size</td></tr><tr><td><code>device</code></td><td>auto</td><td><code>"cpu"</code>, <code>"cuda"</code>, <code>"gpu"</code>, <code>"mps"</code></td></tr><tr><td><code>batch_size</code></td><td>16</td><td>images (or video frames) per batch</td></tr><tr><td><code>quiet</code></td><td>False</td><td>hide the progress panel</td></tr></tbody></table>
+<p>It returns an <code>Inference</code>: <code>.images</code> (a <code>Results</code> for each image, see below), <code>.videos</code> (<code>{name: per-frame detections}</code>), <code>.output</code>, <code>.json</code> and <code>.json_path</code>. Names never collide: two inputs called <code>photo.png</code> become <code>photo.png</code> and <code>photo_2.png</code>. From the terminal: <code>workflow predict detector.nbm clip.mp4</code> (same rules, <code>--split</code>, <code>-o</code>).</p>
+<h2 id="prediction-in-memory-model-predict">Prediction in memory: <code>model.predict</code></h2>
+<p><code>wf.inference</code> is built on <code>model.predict</code>, which you can call directly when you want results in Python without the folder of files:</p>
 <pre><code>model = wf.load("detector.nbm")
 results = model.predict("image.jpg")
 results = model.predict(["image1.jpg", "image2.jpg"])
 results = model.predict("image.jpg", device="cuda", confidence=0.25, iou=0.45, img_size=640)
-results = model.predict("image.jpg", output="predictions/")</code></pre>
+results = model.predict("image.jpg", output="predictions/")
+results = model.predict(frame_rgb_array, output=None)              # nothing written: handy inside your own loop</code></pre>
 <table><thead><tr><th>Argument</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td><code>source</code></td><td>required</td><td>an image path, a PIL / Felix image, an RGB <code>(H, W, 3)</code> uint8 array, or a list of those</td></tr><tr><td><code>device</code></td><td>auto</td><td><code>"cpu"</code>, <code>"cuda"</code>, <code>"gpu"</code>, <code>"mps"</code>; without it the model's device (or the best one) is used</td></tr><tr><td><code>confidence</code></td><td>0.25</td><td>minimum score (confidence × class probability)</td></tr><tr><td><code>iou</code></td><td>0.45</td><td>overlap above which a weaker box of the same class is removed (NMS)</td></tr><tr><td><code>img_size</code></td><td>the model's input</td><td>inference size (int or <code>(H, W)</code>); checked against the architecture</td></tr><tr><td><code>output</code></td><td><code>"results/"</code></td><td>folder for annotated images and <code>predictions.json</code> (created if needed); <code>None</code> writes nothing</td></tr><tr><td><code>max_detections</code></td><td>300</td><td>per image</td></tr></tbody></table>
 <p>What happens: the image is letterboxed (resized keeping its aspect ratio, padded grey), run without gradients (weights never change), decoded, filtered by <code>confidence</code>, cleaned with class-aware NMS, and mapped back to the original pixels. Evaluation uses exactly the same preprocessing. FP32, FP16 and INT8 models all predict the same way.</p>
 <p>Output on disk: <code>results/&lt;image name&gt;.png</code> with boxes and labels, and <code>results/predictions.json</code>:</p>

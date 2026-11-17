@@ -20,7 +20,7 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 <p><code>workflow</code> (or <code>python -m workflow</code>), in the same minimal style as Felix.</p>
 <pre><code>workflow init [NOTEBOOK.ipynb] [--dataset D]    starter notebook: small model, benchmarks before/after, saving
 workflow info MODEL.nbm                        classes, precision, training progress, layer summary
-workflow predict MODEL.nbm IMG [IMG ...]       detect; annotated images + predictions.json in results/
+workflow predict MODEL.nbm SOURCE [...] [--split S] [-o OUT]   images, videos, folders or a Felix dataset → results/
 workflow eval MODEL.nbm [--dataset D --split test]   size/FLOPs/FPS, plus accuracy with a dataset
 workflow quantize MODEL.nbm int8|fp16|fp32 [--calibration D] [-o OUT]   post-training quantisation
 workflow export MODEL.nbm --format onnx|nbm [--precision ...] [-o OUT]
