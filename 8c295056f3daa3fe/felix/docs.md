@@ -54,7 +54,7 @@ pip install --no-deps --no-index --find-links BASE_URL/simple/felix/ felix
 ### Colab / notebooks (direct link)
 
 ```
-!pip install BASE_URL/files/felix-0.4.0-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.4.1-py3-none-any.whl
 ```
 
 A direct wheel URL needs no extra flags: pip fetches NumPy and rich from PyPI itself, and
@@ -77,7 +77,7 @@ Why the extra flags:
 - **`--no-deps`** and the separate `pip install numpy rich`: with `--no-index` pip can't fetch
   dependencies from this page, so install them first the normal way.
 
-Upgrade to the newest version by adding `--upgrade`; pin one with `felix==0.4.0`.
+Upgrade to the newest version by adding `--upgrade`; pin one with `felix==0.4.1`.
 
 Try the example pipeline: download [animals.py](examples/animals.py) and
 [bicycle.png](examples/assets/bicycle.png) (keep it in an `assets/` folder next to the script), then

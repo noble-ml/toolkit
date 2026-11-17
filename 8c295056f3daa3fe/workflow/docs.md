@@ -101,7 +101,7 @@ Why the flags: `--no-index` keeps pip from installing the unrelated public packa
 ### Colab / notebooks
 
 ```
-!pip install BASE_URL/files/felix-0.4.0-py3-none-any.whl BASE_URL/files/workflow-0.3.0-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.4.1-py3-none-any.whl BASE_URL/files/workflow-0.3.1-py3-none-any.whl
 ```
 
 Direct wheel URLs need no flags; pip fetches the dependencies from PyPI. Colab GPUs work with `device="cuda"`.
@@ -1464,6 +1464,12 @@ own splits are used.
 
 Returns the history: one dict per epoch (`epoch`, `loss`, `box`, `obj`, `cls`, `lr`, `seconds`, and with validation
 `map50`, `map50_95`, `precision`, `recall`, `f1`, `fitness`). It is also kept in `model.history`.
+
+### Progress
+
+Training shows a live panel: a bar per run, the epoch and step, the loss parts, the learning rate, and after each
+epoch the validation mAP, the best epoch and the speed. In a terminal it redraws in place; in a notebook (Jupyter,
+VS Code, Colab) it redraws in the cell's output, about twice a second. `quiet=True` hides it.
 
 ### Defaults
 
