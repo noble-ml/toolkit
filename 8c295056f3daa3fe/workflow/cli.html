@@ -20,13 +20,20 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 <p><code>workflow</code> (or <code>python -m workflow</code>), in the same minimal style as Felix.</p>
 <pre><code>workflow init [NOTEBOOK.ipynb] [--dataset D]    starter notebook: small model, benchmarks before/after, saving
 workflow info MODEL.nbm                        classes, precision, training progress, layer summary
-workflow predict MODEL.nbm SOURCE [...] [--split S] [-o OUT]   images, videos, folders or a Felix dataset → results/
+workflow predict &lt;model_path&gt; &lt;image_path&gt;      detect objects; original/, annotated/, predictions.json → results/
 workflow eval MODEL.nbm [--dataset D --split test]   size/FLOPs/FPS, plus accuracy with a dataset
 workflow quantize MODEL.nbm int8|fp16|fp32 [--calibration D] [-o OUT]   post-training quantisation
 workflow export MODEL.nbm --format onnx|nbm [--precision ...] [-o OUT]
 workflow script MODEL.nbm --preset image|folder|video|webcam    write an inference script
 workflow devices                               cpu / cuda / mps, and why something is unavailable</code></pre>
 <p><code>quantize</code> writes <code>MODEL-&lt;type&gt;.nbm</code> by default and prints the size before and after. Commands never overwrite existing files without <code>--overwrite</code>. Errors print the what / why / fix explanation and exit with status 1.</p>
+<h2 id="predict">predict</h2>
+<pre><code>workflow predict detector.nbm photo.jpg                    # one image → results/
+workflow predict detector.nbm photo1.jpg photo2.jpg        # several images
+workflow predict detector.nbm clip.mp4                     # a video, every frame
+workflow predict detector.nbm photos/ --all                # every image in a folder (default: one at random)
+workflow predict detector.nbm shapes.felix --all           # every test image of a Felix dataset</code></pre>
+<p>The model comes first, then the image (or images). Results go to <code>results/</code>: <code>original/</code>, <code>annotated/</code> and <code>predictions.json</code>. Options: <code>-o</code> (another folder), <code>--all</code>, <code>--split train|val|test</code>, <code>--confidence</code>, <code>--iou</code>, <code>--img-size</code>, <code>--device</code>. This is <code>wf.inference</code> from the terminal (<a href="detection.html">Detection</a>).</p>
 <h2 id="init">init</h2>
 <pre><code>workflow init                                   # → workflow.ipynb
 workflow init detector.ipynb --dataset data.felix --img-size 320 --epochs 50 --device cuda</code></pre>

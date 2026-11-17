@@ -108,7 +108,7 @@ model.export(format="onnx", output=os.path.join(args.out, "detector.onnx"))
 
 # 5. inference: original/, annotated/ and predictions.json go to results/ -----------------------------
 detector = wf.load(os.path.join(args.out, "detector-int8.nbm" if args.qat_epochs else "detector.nbm"))
-run = wf.inference(data_path, detector, os.path.join(args.out, "results"))     # the test split, picked automatically
+run = wf.inference(data_path, detector, os.path.join(args.out, "results"), all=True)   # every test image
 print(run)
 for r in run.images[:3]:
     print(r.path, r, [round(c, 2) for c in r.confidences])

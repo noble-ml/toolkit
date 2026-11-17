@@ -329,13 +329,14 @@ model.load("detector.nbm")            # fills a model you already built the same
 model.export(format="nbm", output="detector-int8.nbm", precision="int8", calibration=data.val)</code></pre>
 <h3 id="wf-inference"><code>wf.inference</code></h3>
 <p><strong>Toddler words:</strong> "go look at these and tell me what you see." Give it a picture, a video, a folder or a whole Felix dataset, plus the brain, plus a folder for the answers. It figures out what you gave it by itself.</p>
-<p><strong>Why you'd use it:</strong> this is how you *use* a trained model. It keeps everything together in one folder: the original pictures, the same pictures with boxes drawn on, and <code>predictions.json</code> with every box. Give it a Felix dataset and it picks the test pile on its own (the pictures the model never trained on), unless you choose another pile.</p>
+<p><strong>Why you'd use it:</strong> this is how you *use* a trained model. It keeps everything together in one folder: the original pictures, the same pictures with boxes drawn on, and <code>predictions.json</code> with every box. Give it a Felix dataset and it picks the test pile on its own (the pictures the model never trained on), unless you choose another pile. From a big pile (a dataset or a folder) it looks at <strong>one picture picked at random</strong>, a quick spot check. Say <code>all=True</code> when you want every picture done.</p>
 <pre><code>model = wf.load("detector.nbm")
-run = wf.inference("shapes.felix", model, "results/", split=None, confidence=0.25, iou=0.45,
-                   img_size=None, device=None, batch_size=16)
-wf.inference("holiday.mp4", model, "results/video/")         # every frame, annotated video saved
-wf.inference("photos/", model, "results/photos/")            # every image (and video) in the folder
-wf.inference(data.val, model, "results/val/")                # you pick the pile</code></pre>
+run = wf.inference("shapes.felix", model, "results/", all=False, split=None, confidence=0.25, iou=0.45,
+                   img_size=None, device=None, batch_size=16)      # one random test picture
+wf.inference("shapes.felix", model, "results/all/", all=True)       # every test picture
+wf.inference("holiday.mp4", model, "results/video/")                # every frame, annotated video saved
+wf.inference("photos/", model, "results/photos/", all=True)         # every image (and video) in the folder
+wf.inference(data.val, model, "results/val/", all=True)             # you pick the pile</code></pre>
 <p><strong>Watch out:</strong> videos need <code>pip install opencv-python</code>. The folder can be reused: files are added, and names never overwrite each other.</p>
 <h3 id="model-predict"><code>model.predict</code></h3>
 <p><strong>Toddler words:</strong> "what's in this picture?", answered straight back to you in Python.</p>
@@ -361,7 +362,7 @@ r.show()</code></pre>
 <p><strong>Why you'd use it:</strong> checking, converting and running models without writing Python.</p>
 <pre><code>workflow init my_detector.ipynb                     # a starter notebook
 workflow info detector.nbm
-workflow predict detector.nbm photo.jpg --confidence 0.25     # also videos, folders, datasets
+workflow predict detector.nbm photo.jpg --confidence 0.25     # also videos, folders, datasets (--all for every image)
 workflow eval detector.nbm --dataset shapes.felix --split test
 workflow quantize detector.nbm int8 --calibration shapes.felix
 workflow export detector.nbm --format onnx --precision fp32
