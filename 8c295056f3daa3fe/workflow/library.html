@@ -1,0 +1,135 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · library</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="cookbook.html">Cookbook</a><a href="library.html" class="on">Library</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="composition.html">Composition</a><a href="model.html">Model</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="evaluation.html">Evaluation</a><a href="quantization.html">Quantisation</a><a href="devices.html">Devices</a><a href="errors.html">Errors</a><a href="cli.html">CLI</a><a href="changes.html">Changes</a></nav><h1 id="workflow-library">Workflow library</h1>
+<p>Everything you can put in a model, one line each. Write every layer/block on its own line inside <code>wf.stack(...)</code>. Blocks build their own layers inside: you only pick their arguments, you don't put layers in between. Only <code>wf.stack</code>, <code>wf.Residual</code> and <code>wf.parallel</code> take layers you write yourself.</p>
+<p>Workflow 0.3.9. Full details: <a href="layers.html">Layers</a>, <a href="blocks.html">Blocks</a>, <a href="composition.html">Composition</a>. <code>workflow init</code> writes this same table as <code>library.md</code> next to the notebook.</p>
+<h2 id="start">Start</h2>
+<table><thead><tr><th>Tool</th><th>What it does</th><th>You choose</th><th>Example</th></tr></thead><tbody><tr><td><code>wf.input</code></td><td>says what picture comes in; must be the first line of the model</td><td><code>channels=3</code>, <code>height=640</code>, <code>width=640</code></td><td><code>wf.input(channels=3, height=640, width=640)</code></td></tr><tr><td><code>wf.stack</code></td><td>the model itself: runs its lines top to bottom, each feeding the next</td><td>the layers, one per line</td><td>see <a href="#a-whole-model">wf.stack below</a></td></tr></tbody></table>
+<h2 id="layers">Layers</h2>
+<p>Input channels are always worked out from the line above. <code>padding="same"</code> keeps the size (÷ stride), <code>"valid"</code> adds none.</p>
+<table><thead><tr><th>Layer</th><th>What it does</th><th>You choose</th><th>Example</th></tr></thead><tbody><tr><td><code>wf.Conv2D</code></td><td>a learned k×k filter bank: the basic building brick</td><td><code>out_channels</code>, <code>kernel_size=3</code>, <code>stride=1</code>, <code>padding="valid"</code></td><td><code>wf.Conv2D(32, kernel_size=3, stride=2, padding="same")</code></td></tr><tr><td><code>wf.DilatedConv2D</code></td><td>a k×k conv with gaps between its taps: sees wider for the same cost</td><td><code>out_channels</code>, <code>kernel_size=3</code>, <code>dilation=2</code>, <code>stride=1</code>, <code>padding="valid"</code></td><td><code>wf.DilatedConv2D(64, kernel_size=3, dilation=2, padding="same")</code></td></tr><tr><td><code>wf.DepthwiseConv2D</code></td><td>one k×k filter per channel (no mixing between channels); keeps the channel count</td><td><code>kernel_size=3</code>, <code>stride=1</code>, <code>padding="valid"</code></td><td><code>wf.DepthwiseConv2D(kernel_size=3, stride=1, padding="same")</code></td></tr><tr><td><code>wf.PointwiseConv2D</code></td><td>a 1×1 conv: mixes channels, never looks at neighbours</td><td><code>out_channels</code></td><td><code>wf.PointwiseConv2D(64)</code></td></tr><tr><td><code>wf.SeparableConv2D</code></td><td>builds a DepthwiseConv2D → PointwiseConv2D: a cheap stand-in for Conv2D</td><td><code>out_channels</code>, <code>kernel_size=3</code>, <code>stride=1</code>, <code>padding="valid"</code></td><td><code>wf.SeparableConv2D(64, kernel_size=3, padding="same")</code></td></tr><tr><td><code>wf.TransposeConv2D</code></td><td>a learned upsampling ("up" conv); the defaults double the size</td><td><code>out_channels</code>, <code>kernel_size=2</code>, <code>stride=2</code>, <code>padding="valid"</code></td><td><code>wf.TransposeConv2D(32, kernel_size=2, stride=2)</code></td></tr><tr><td><code>wf.BatchNorm2D</code></td><td>evens out each channel's numbers so training stays stable; channels inferred</td><td>nothing</td><td><code>wf.BatchNorm2D()</code></td></tr><tr><td><code>wf.ReLU</code></td><td>keeps positives, zeroes negatives</td><td>nothing</td><td><code>wf.ReLU()</code></td></tr><tr><td><code>wf.LeakyReLU</code></td><td>like ReLU but lets a little of the negatives through</td><td><code>slope=0.1</code></td><td><code>wf.LeakyReLU(slope=0.1)</code></td></tr><tr><td><code>wf.SiLU</code></td><td>smooth ReLU (x · sigmoid(x)); Workflow's default activation</td><td>nothing</td><td><code>wf.SiLU()</code></td></tr><tr><td><code>wf.Sigmoid</code></td><td>squashes to 0…1</td><td>nothing</td><td><code>wf.Sigmoid()</code></td></tr><tr><td><code>wf.MaxPool2D</code></td><td>keeps the biggest value in each window</td><td><code>kernel_size=2</code>, <code>stride=kernel_size</code>, <code>padding="valid"</code></td><td><code>wf.MaxPool2D(kernel_size=2, stride=2, padding="valid")</code></td></tr><tr><td><code>wf.MinPool2D</code></td><td>keeps the smallest value in each window</td><td><code>kernel_size=2</code>, <code>stride=kernel_size</code>, <code>padding="valid"</code></td><td><code>wf.MinPool2D(kernel_size=3, stride=1, padding="same")</code></td></tr><tr><td><code>wf.AvgPool2D</code></td><td>averages each window</td><td><code>kernel_size=2</code>, <code>stride=kernel_size</code>, <code>padding="valid"</code></td><td><code>wf.AvgPool2D(kernel_size=2, stride=2, padding="valid")</code></td></tr><tr><td><code>wf.Upsample</code></td><td>makes the picture bigger by repeating pixels (no learning)</td><td><code>scale=2</code></td><td><code>wf.Upsample(scale=2)</code></td></tr></tbody></table>
+<h2 id="blocks">Blocks</h2>
+<table><thead><tr><th>Block</th><th>What it builds inside</th><th>You choose</th><th>Example</th></tr></thead><tbody><tr><td><code>wf.Bottleneck</code></td><td>1×1 conv → k×k conv → 1×1 conv (each with BatchNorm, SiLU on the first two), plus the shortcut add (projected by a 1×1 conv when channels or stride change), then SiLU</td><td><code>out_channels=None</code> (same as input), <code>kernel_size=3</code>, <code>stride=1</code>, <code>reduction=2</code>, <code>shortcut=True</code></td><td><code>wf.Bottleneck(out_channels=64, kernel_size=3, stride=1)</code></td></tr><tr><td><code>wf.CSP</code></td><td>splits into two 1×1 conv paths; one goes through <code>n</code> Bottlenecks; then concat → 1×1 conv</td><td><code>out_channels=None</code>, <code>n=1</code>, <code>shortcut=True</code></td><td><code>wf.CSP(out_channels=64, n=2, shortcut=True)</code></td></tr><tr><td><code>wf.SPP</code></td><td>1×1 conv → max-pools of several sizes side by side (plus the unpooled map) → concat → 1×1 conv; keeps the size</td><td><code>out_channels=None</code>, <code>kernels=(5, 9, 13)</code></td><td><code>wf.SPP(out_channels=128, kernels=(5, 9, 13))</code></td></tr><tr><td><code>wf.SPPF</code></td><td>the fast SPP: 1×1 conv → one max-pool size chained 3× (plus the unpooled map) → concat → 1×1 conv; keeps the size</td><td><code>out_channels=None</code>, <code>kernel_size=5</code></td><td><code>wf.SPPF(out_channels=128, kernel_size=5)</code></td></tr><tr><td><code>wf.SE</code></td><td>channel attention: global average pool → 1×1 conv → ReLU → 1×1 conv → sigmoid → multiply each channel; keeps the shape</td><td><code>reduction=16</code></td><td><code>wf.SE(reduction=16)</code></td></tr><tr><td><code>wf.CBAM</code></td><td>SE-style channel attention (average and max pooled) then a "where to look" map: k×k conv over the channel mean and max → sigmoid → multiply; keeps the shape</td><td><code>reduction=16</code>, <code>kernel_size=7</code></td><td><code>wf.CBAM(reduction=16, kernel_size=7)</code></td></tr><tr><td><code>wf.Focus</code></td><td>spatial-to-channel: each 2×2 pixel block becomes 4 channels (halves height and width), then a conv with BatchNorm and SiLU</td><td><code>out_channels</code>, <code>kernel_size=3</code></td><td><code>wf.Focus(32, kernel_size=3)</code></td></tr></tbody></table>
+<h2 id="composition">Composition</h2>
+<table><thead><tr><th>Tool</th><th>What it does</th><th>You choose</th><th>Example</th></tr></thead><tbody><tr><td><code>wf.Residual</code></td><td>nothing of its own: wraps the layers you write inside it with a skip connection (output = layers(x) + x)</td><td>the layers, plus an optional <code>shortcut=</code> (a layer or list) when the shape changes</td><td>see <a href="#residual">wf.Residual below</a></td></tr><tr><td><code>wf.parallel</code></td><td>sends the same input down every branch and merges the results</td><td>the branches (2+), <code>merge="concat"</code> or <code>"add"</code></td><td>see <a href="#parallel">wf.parallel below</a></td></tr><tr><td><code>wf.feature</code></td><td>names the current tensor so later lines can reach back to it; passes it on unchanged</td><td>a name, or a tuple of names after FPN/PAN</td><td><code>wf.feature("p3")</code></td></tr><tr><td><code>wf.concat</code></td><td>joins named features along channels (same height and width)</td><td>the feature names</td><td><code>wf.concat("p3", "up")</code></td></tr><tr><td><code>wf.add</code></td><td>sums named features (identical shapes)</td><td>the feature names</td><td><code>wf.add("p3", "up")</code></td></tr><tr><td><code>wf.FPN</code></td><td>top-down pyramid: 1×1 Conv-BN-SiLU per map, each coarser map resized and added into the next finer one, then a 3×3 Conv-BN-SiLU per level</td><td>the feature names, <code>channels=None</code> (smallest input)</td><td><code>wf.FPN("p3", "p4", "p5", channels=64)</code></td></tr><tr><td><code>wf.PAN</code></td><td>bottom-up pass over the pyramid: stride-2 3×3 Conv-BN-SiLU down, add, 3×3 Conv-BN-SiLU refine</td><td><code>channels=None</code>, optional feature names</td><td><code>wf.PAN(channels=64)</code></td></tr><tr><td><code>wf.head</code></td><td>detection head; per map two 3×3 Conv-BN-SiLU and a 1×1 conv giving box, confidence and class scores; must be the last line</td><td><code>classes=80</code>, <code>channels=None</code></td><td><code>wf.head(classes=20)</code></td></tr></tbody></table>
+<h2 id="tools">Tools</h2>
+<table><thead><tr><th>Tool</th><th>What it does</th><th>You choose</th><th>Example</th></tr></thead><tbody><tr><td><code>model.summary()</code></td><td>prints every layer with its output shape, parameters and MACs (multiply-adds)</td><td><code>input=</code> (another picture size), <code>show=True</code></td><td><code>model.summary()</code></td></tr><tr><td><code>model.train(...)</code></td><td>trains on a Felix split; live bar and per-epoch table; saves <code>last.nbm</code> / <code>best.nbm</code></td><td><code>train</code>, <code>validation=</code>, <code>epochs=100</code>, <code>batch_size=16</code>, <code>lr=1e-3</code>, <code>device=</code>, <code>img_size=</code>, <code>optimizer="adamw"</code>, <code>patience=30</code>, <code>save_every=5</code>, <code>output="runs/train"</code>, <code>quantization=</code>, <code>augment=True</code>, <code>ema=True</code></td><td><code>model.train(data.train, validation=data.val, epochs=50, batch_size=16, device="mps")</code></td></tr><tr><td><code>wf.eval(model)</code></td><td>size, FLOPs, latency, FPS, memory; with <code>dataset=</code> also mAP, precision, recall</td><td><code>dataset=None</code>, <code>device=</code>, <code>img_size=</code>, <code>batch_size=8</code>, <code>confidence=0.001</code>, <code>iou=0.6</code></td><td><code>wf.eval(model, dataset=data.test)</code></td></tr><tr><td><code>model.save(path)</code> / <code>wf.load(path)</code></td><td>saves / loads a <code>.nbm</code> (weights, training state, class names)</td><td>the path</td><td><code>model.save("detector.nbm")</code></td></tr><tr><td><code>wf.inference(source, model, output)</code></td><td>runs the model on an image, video, folder or Felix dataset; saves <code>original/</code>, <code>annotated/</code>, <code>predictions.json</code></td><td><code>all=False</code> (one random image from a dataset/folder), <code>split=</code>, <code>confidence=0.25</code>, <code>iou=0.45</code>, <code>img_size=</code>, <code>device=</code>, <code>batch_size=16</code></td><td><code>wf.inference("photo.jpg", model, "results/")</code></td></tr><tr><td><code>wf.QAT(...)</code></td><td>quantisation-aware training: pass as <code>quantization=</code> to <code>model.train</code></td><td><code>precision="int8"</code></td><td><code>model.train(data.train, validation=data.val, epochs=60, quantization=wf.QAT("int8"))</code></td></tr><tr><td><code>model.quantize(...)</code></td><td>post-training quantisation (also <code>workflow quantize &lt;model&gt; &lt;type&gt;</code>)</td><td><code>precision="int8"</code>, <code>calibration=</code></td><td><code>model.quantize("int8", calibration=data.val)</code></td></tr><tr><td><code>model.export(...)</code></td><td>writes ONNX or <code>.nbm</code></td><td><code>format="onnx"</code>, <code>output=</code>, <code>precision="fp32"</code>, <code>calibration=</code>, <code>img_size=</code></td><td><code>model.export("onnx", output="detector.onnx")</code></td></tr><tr><td><code>model.plot()</code></td><td>draws the computation graph as a picture</td><td><code>detail="layers"</code>, <code>show=True</code></td><td><code>model.plot(show=False)</code></td></tr></tbody></table>
+<h2 id="examples">Examples</h2>
+<h3 id="a-whole-model">A whole model</h3>
+<p><code>wf.stack</code> is the model. One line per layer or block, top to bottom, the way the picture flows:</p>
+<pre><code>import workflow as wf
+
+model = wf.stack(
+    wf.input(channels=3, height=640, width=640),
+
+    # 640 → 320
+    wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+
+    # 320 → 160
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(out_channels=32, n=1),
+
+    # 160 → 80: small objects
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(out_channels=64, n=2),
+    wf.feature("p3"),
+
+    # 80 → 40: medium objects
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.Bottleneck(),
+    wf.SE(reduction=16),
+    wf.feature("p4"),
+
+    # 40 → 20: large objects
+    wf.Conv2D(256, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.SPPF(out_channels=256, kernel_size=5),
+    wf.feature("p5"),
+
+    # neck and head
+    wf.FPN("p3", "p4", "p5", channels=64),
+    wf.PAN(channels=64),
+    wf.head(classes=20),
+)
+model.summary()</code></pre>
+<h3 id="residual">Residual</h3>
+<p>Your own layers with a skip connection around them (they must keep the shape):</p>
+<pre><code>wf.Residual(
+    wf.Conv2D(64, kernel_size=3, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.Conv2D(64, kernel_size=3, padding="same"),
+    wf.BatchNorm2D(),
+),</code></pre>
+<p>If the layers change the shape, give the shortcut a projection:</p>
+<pre><code>wf.Residual(
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    shortcut=wf.Conv2D(128, kernel_size=1, stride=2),
+),</code></pre>
+<h3 id="parallel">Parallel</h3>
+<p>Each branch gets the same input; <code>wf.stack</code> groups the lines of one branch:</p>
+<pre><code>wf.parallel(
+    wf.stack(
+        wf.Conv2D(32, kernel_size=1),
+        wf.BatchNorm2D(),
+        wf.SiLU(),
+    ),
+    wf.stack(
+        wf.Conv2D(32, kernel_size=3, padding="same"),
+        wf.BatchNorm2D(),
+        wf.SiLU(),
+    ),
+    merge="concat",
+),</code></pre>
+<h3 id="features-concat-add">Features, concat, add</h3>
+<p>Name a tensor with <code>wf.feature</code>, keep going, then reach back to it by name:</p>
+<pre><code>    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.feature("p3"),                  # 32 channels
+
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.PointwiseConv2D(32),
+    wf.Upsample(scale=2),
+    wf.feature("up"),                  # back to p3's size, 32 channels
+
+    wf.concat("p3", "up"),             # 64 channels</code></pre>
+<h3 id="train-check-save-use">Train, check, save, use</h3>
+<pre><code>import felix as fx
+
+data = fx.load("shapes.felix")
+model.train(data.train, validation=data.val, epochs=50, batch_size=16, device="mps")
+wf.eval(model, dataset=data.test)
+model.save("detector.nbm")
+
+model = wf.load("detector.nbm")
+wf.inference("photo.jpg", model, "results/")</code></pre></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

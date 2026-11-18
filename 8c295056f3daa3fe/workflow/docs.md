@@ -7,6 +7,7 @@
 - [Install](#install)
 - [Demo](#demo)
 - [Cookbook](#cookbook)
+- [Workflow library](#workflow-library)
 - [Getting started](#getting-started)
 - [Layers](#layers)
 - [Blocks](#blocks)
@@ -102,7 +103,7 @@ Why the flags: `--no-index` keeps pip from installing the unrelated public packa
 ### Colab / notebooks
 
 ```
-!pip install BASE_URL/files/felix-0.4.2-py3-none-any.whl BASE_URL/files/workflow-0.3.6-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.4.2-py3-none-any.whl BASE_URL/files/workflow-0.3.9-py3-none-any.whl
 ```
 
 Direct wheel URLs need no flags; pip fetches the dependencies from PyPI. Colab GPUs work with `device="cuda"`.
@@ -1092,6 +1093,217 @@ wf.Residual(
 
 ---
 
+## Workflow library
+
+Everything you can put in a model, one line each. Write every layer/block on its own line inside `wf.stack(...)`.
+Blocks build their own layers inside: you only pick their arguments, you don't put layers in between.
+Only `wf.stack`, `wf.Residual` and `wf.parallel` take layers you write yourself.
+
+Workflow 0.3.9. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
+
+### Start
+
+| Tool | What it does | You choose | Example |
+|---|---|---|---|
+| `wf.input` | says what picture comes in; must be the first line of the model | `channels=3`, `height=640`, `width=640` | `wf.input(channels=3, height=640, width=640)` |
+| `wf.stack` | the model itself: runs its lines top to bottom, each feeding the next | the layers, one per line | see [wf.stack below](#a-whole-model) |
+
+### Layers
+
+Input channels are always worked out from the line above. `padding="same"` keeps the size (÷ stride),
+`"valid"` adds none.
+
+| Layer | What it does | You choose | Example |
+|---|---|---|---|
+| `wf.Conv2D` | a learned k×k filter bank: the basic building brick | `out_channels`, `kernel_size=3`, `stride=1`, `padding="valid"` | `wf.Conv2D(32, kernel_size=3, stride=2, padding="same")` |
+| `wf.DilatedConv2D` | a k×k conv with gaps between its taps: sees wider for the same cost | `out_channels`, `kernel_size=3`, `dilation=2`, `stride=1`, `padding="valid"` | `wf.DilatedConv2D(64, kernel_size=3, dilation=2, padding="same")` |
+| `wf.DepthwiseConv2D` | one k×k filter per channel (no mixing between channels); keeps the channel count | `kernel_size=3`, `stride=1`, `padding="valid"` | `wf.DepthwiseConv2D(kernel_size=3, stride=1, padding="same")` |
+| `wf.PointwiseConv2D` | a 1×1 conv: mixes channels, never looks at neighbours | `out_channels` | `wf.PointwiseConv2D(64)` |
+| `wf.SeparableConv2D` | builds a DepthwiseConv2D → PointwiseConv2D: a cheap stand-in for Conv2D | `out_channels`, `kernel_size=3`, `stride=1`, `padding="valid"` | `wf.SeparableConv2D(64, kernel_size=3, padding="same")` |
+| `wf.TransposeConv2D` | a learned upsampling ("up" conv); the defaults double the size | `out_channels`, `kernel_size=2`, `stride=2`, `padding="valid"` | `wf.TransposeConv2D(32, kernel_size=2, stride=2)` |
+| `wf.BatchNorm2D` | evens out each channel's numbers so training stays stable; channels inferred | nothing | `wf.BatchNorm2D()` |
+| `wf.ReLU` | keeps positives, zeroes negatives | nothing | `wf.ReLU()` |
+| `wf.LeakyReLU` | like ReLU but lets a little of the negatives through | `slope=0.1` | `wf.LeakyReLU(slope=0.1)` |
+| `wf.SiLU` | smooth ReLU (x · sigmoid(x)); Workflow's default activation | nothing | `wf.SiLU()` |
+| `wf.Sigmoid` | squashes to 0…1 | nothing | `wf.Sigmoid()` |
+| `wf.MaxPool2D` | keeps the biggest value in each window | `kernel_size=2`, `stride=kernel_size`, `padding="valid"` | `wf.MaxPool2D(kernel_size=2, stride=2, padding="valid")` |
+| `wf.MinPool2D` | keeps the smallest value in each window | `kernel_size=2`, `stride=kernel_size`, `padding="valid"` | `wf.MinPool2D(kernel_size=3, stride=1, padding="same")` |
+| `wf.AvgPool2D` | averages each window | `kernel_size=2`, `stride=kernel_size`, `padding="valid"` | `wf.AvgPool2D(kernel_size=2, stride=2, padding="valid")` |
+| `wf.Upsample` | makes the picture bigger by repeating pixels (no learning) | `scale=2` | `wf.Upsample(scale=2)` |
+
+### Blocks
+
+| Block | What it builds inside | You choose | Example |
+|---|---|---|---|
+| `wf.Bottleneck` | 1×1 conv → k×k conv → 1×1 conv (each with BatchNorm, SiLU on the first two), plus the shortcut add (projected by a 1×1 conv when channels or stride change), then SiLU | `out_channels=None` (same as input), `kernel_size=3`, `stride=1`, `reduction=2`, `shortcut=True` | `wf.Bottleneck(out_channels=64, kernel_size=3, stride=1)` |
+| `wf.CSP` | splits into two 1×1 conv paths; one goes through `n` Bottlenecks; then concat → 1×1 conv | `out_channels=None`, `n=1`, `shortcut=True` | `wf.CSP(out_channels=64, n=2, shortcut=True)` |
+| `wf.SPP` | 1×1 conv → max-pools of several sizes side by side (plus the unpooled map) → concat → 1×1 conv; keeps the size | `out_channels=None`, `kernels=(5, 9, 13)` | `wf.SPP(out_channels=128, kernels=(5, 9, 13))` |
+| `wf.SPPF` | the fast SPP: 1×1 conv → one max-pool size chained 3× (plus the unpooled map) → concat → 1×1 conv; keeps the size | `out_channels=None`, `kernel_size=5` | `wf.SPPF(out_channels=128, kernel_size=5)` |
+| `wf.SE` | channel attention: global average pool → 1×1 conv → ReLU → 1×1 conv → sigmoid → multiply each channel; keeps the shape | `reduction=16` | `wf.SE(reduction=16)` |
+| `wf.CBAM` | SE-style channel attention (average and max pooled) then a "where to look" map: k×k conv over the channel mean and max → sigmoid → multiply; keeps the shape | `reduction=16`, `kernel_size=7` | `wf.CBAM(reduction=16, kernel_size=7)` |
+| `wf.Focus` | spatial-to-channel: each 2×2 pixel block becomes 4 channels (halves height and width), then a conv with BatchNorm and SiLU | `out_channels`, `kernel_size=3` | `wf.Focus(32, kernel_size=3)` |
+
+### Composition
+
+| Tool | What it does | You choose | Example |
+|---|---|---|---|
+| `wf.Residual` | nothing of its own: wraps the layers you write inside it with a skip connection (output = layers(x) + x) | the layers, plus an optional `shortcut=` (a layer or list) when the shape changes | see [wf.Residual below](#residual) |
+| `wf.parallel` | sends the same input down every branch and merges the results | the branches (2+), `merge="concat"` or `"add"` | see [wf.parallel below](#parallel) |
+| `wf.feature` | names the current tensor so later lines can reach back to it; passes it on unchanged | a name, or a tuple of names after FPN/PAN | `wf.feature("p3")` |
+| `wf.concat` | joins named features along channels (same height and width) | the feature names | `wf.concat("p3", "up")` |
+| `wf.add` | sums named features (identical shapes) | the feature names | `wf.add("p3", "up")` |
+| `wf.FPN` | top-down pyramid: 1×1 Conv-BN-SiLU per map, each coarser map resized and added into the next finer one, then a 3×3 Conv-BN-SiLU per level | the feature names, `channels=None` (smallest input) | `wf.FPN("p3", "p4", "p5", channels=64)` |
+| `wf.PAN` | bottom-up pass over the pyramid: stride-2 3×3 Conv-BN-SiLU down, add, 3×3 Conv-BN-SiLU refine | `channels=None`, optional feature names | `wf.PAN(channels=64)` |
+| `wf.head` | detection head; per map two 3×3 Conv-BN-SiLU and a 1×1 conv giving box, confidence and class scores; must be the last line | `classes=80`, `channels=None` | `wf.head(classes=20)` |
+
+### Tools
+
+| Tool | What it does | You choose | Example |
+|---|---|---|---|
+| `model.summary()` | prints every layer with its output shape, parameters and MACs (multiply-adds) | `input=` (another picture size), `show=True` | `model.summary()` |
+| `model.train(...)` | trains on a Felix split; live bar and per-epoch table; saves `last.nbm` / `best.nbm` | `train`, `validation=`, `epochs=100`, `batch_size=16`, `lr=1e-3`, `device=`, `img_size=`, `optimizer="adamw"`, `patience=30`, `save_every=5`, `output="runs/train"`, `quantization=`, `augment=True`, `ema=True` | `model.train(data.train, validation=data.val, epochs=50, batch_size=16, device="mps")` |
+| `wf.eval(model)` | size, FLOPs, latency, FPS, memory; with `dataset=` also mAP, precision, recall | `dataset=None`, `device=`, `img_size=`, `batch_size=8`, `confidence=0.001`, `iou=0.6` | `wf.eval(model, dataset=data.test)` |
+| `model.save(path)` / `wf.load(path)` | saves / loads a `.nbm` (weights, training state, class names) | the path | `model.save("detector.nbm")` |
+| `wf.inference(source, model, output)` | runs the model on an image, video, folder or Felix dataset; saves `original/`, `annotated/`, `predictions.json` | `all=False` (one random image from a dataset/folder), `split=`, `confidence=0.25`, `iou=0.45`, `img_size=`, `device=`, `batch_size=16` | `wf.inference("photo.jpg", model, "results/")` |
+| `wf.QAT(...)` | quantisation-aware training: pass as `quantization=` to `model.train` | `precision="int8"` | `model.train(data.train, validation=data.val, epochs=60, quantization=wf.QAT("int8"))` |
+| `model.quantize(...)` | post-training quantisation (also `workflow quantize <model> <type>`) | `precision="int8"`, `calibration=` | `model.quantize("int8", calibration=data.val)` |
+| `model.export(...)` | writes ONNX or `.nbm` | `format="onnx"`, `output=`, `precision="fp32"`, `calibration=`, `img_size=` | `model.export("onnx", output="detector.onnx")` |
+| `model.plot()` | draws the computation graph as a picture | `detail="layers"`, `show=True` | `model.plot(show=False)` |
+
+### Examples
+
+#### A whole model
+
+`wf.stack` is the model. One line per layer or block, top to bottom, the way the picture flows:
+
+```python
+import workflow as wf
+
+model = wf.stack(
+    wf.input(channels=3, height=640, width=640),
+
+    # 640 → 320
+    wf.Conv2D(16, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+
+    # 320 → 160
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(out_channels=32, n=1),
+
+    # 160 → 80: small objects
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(out_channels=64, n=2),
+    wf.feature("p3"),
+
+    # 80 → 40: medium objects
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.Bottleneck(),
+    wf.SE(reduction=16),
+    wf.feature("p4"),
+
+    # 40 → 20: large objects
+    wf.Conv2D(256, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.SPPF(out_channels=256, kernel_size=5),
+    wf.feature("p5"),
+
+    # neck and head
+    wf.FPN("p3", "p4", "p5", channels=64),
+    wf.PAN(channels=64),
+    wf.head(classes=20),
+)
+model.summary()
+```
+
+#### Residual
+
+Your own layers with a skip connection around them (they must keep the shape):
+
+```python
+wf.Residual(
+    wf.Conv2D(64, kernel_size=3, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.Conv2D(64, kernel_size=3, padding="same"),
+    wf.BatchNorm2D(),
+),
+```
+
+If the layers change the shape, give the shortcut a projection:
+
+```python
+wf.Residual(
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    shortcut=wf.Conv2D(128, kernel_size=1, stride=2),
+),
+```
+
+#### Parallel
+
+Each branch gets the same input; `wf.stack` groups the lines of one branch:
+
+```python
+wf.parallel(
+    wf.stack(
+        wf.Conv2D(32, kernel_size=1),
+        wf.BatchNorm2D(),
+        wf.SiLU(),
+    ),
+    wf.stack(
+        wf.Conv2D(32, kernel_size=3, padding="same"),
+        wf.BatchNorm2D(),
+        wf.SiLU(),
+    ),
+    merge="concat",
+),
+```
+
+#### Features, concat, add
+
+Name a tensor with `wf.feature`, keep going, then reach back to it by name:
+
+```python
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.feature("p3"),                  # 32 channels
+
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.PointwiseConv2D(32),
+    wf.Upsample(scale=2),
+    wf.feature("up"),                  # back to p3's size, 32 channels
+
+    wf.concat("p3", "up"),             # 64 channels
+```
+
+#### Train, check, save, use
+
+```python
+import felix as fx
+
+data = fx.load("shapes.felix")
+model.train(data.train, validation=data.val, epochs=50, batch_size=16, device="mps")
+wf.eval(model, dataset=data.test)
+model.save("detector.nbm")
+
+model = wf.load("detector.nbm")
+wf.inference("photo.jpg", model, "results/")
+```
+
+---
+
 ## Getting started
 
 The quickest start is `workflow init`: it writes a notebook with a small model, benchmarks before and after
@@ -1597,6 +1809,18 @@ for r in model.history:
   1.3 strides and confidences of about 1%, which keeps the first steps stable.
 - **Optimizer**: AdamW, weight decay 5e-4 on weights (not on biases and BatchNorm).
 - **Schedule**: linear warm-up (about 3 epochs, at least 100 steps), then cosine decay to 1% of `lr`.
+
+### Learning rate
+
+Two things adapt, one doesn't:
+
+- **Per weight (adaptive)**: AdamW gives every weight its own effective step size, from the running size of its
+  gradients. Weights with big, noisy gradients take smaller steps; quiet ones take bigger steps.
+- **Over time (scheduled)**: the overall `lr` follows a fixed plan worked out from `epochs`: it ramps up from almost
+  0 during warm-up, then glides down along a cosine curve to 1% of `lr` at the last epoch. The `lr` on the progress
+  bar is this value.
+- **Not adaptive**: it doesn't react to the validation loss (no "reduce on plateau"). Because the plan depends on
+  `epochs`, a run with more epochs decays more slowly; a continued run keeps following the plan for the new total.
 - **Stability**: gradients clipped at norm 10; a NaN/inf loss stops training with an explanation.
 - **Best model**: highest `0.1 × mAP50 + 0.9 × mAP50-95` on the validation data (lowest loss without validation).
 
@@ -1619,7 +1843,11 @@ saved optimizer state doesn't fit the model, a fresh optimizer is created with a
 ### Speed
 
 Measured on the demo detector (1.3M parameters, 256×256, batch 16): about 32 images/s on an Apple M-series CPU,
-about 47 images/s on a GTX 1050. Workflow's kernels are its own; they are slower than cuDNN-backed frameworks on
+about 47 images/s on a GTX 1050. The `workflow init` model at 640×640, batch 16, on an Apple M2 GPU (`device="mps"`):
+about 45 images/s (0.3.7; 16 before).
+
+The cost of a step grows with the picture area: 640×640 is 2.4× the work of 416×416 and 4× of 320×320. If your
+objects aren't tiny, a smaller `img_size` is the biggest speed-up there is. Workflow's kernels are its own; they are slower than cuDNN-backed frameworks on
 large models, which is the price of owning the stack.
 
 ---
@@ -1739,6 +1967,15 @@ workflow devices                               # what this machine has, and why 
 A requested device that isn't available raises a `DeviceError` explaining why (no driver, no MLX, no GPU) and
 what to do. Workflow never silently runs on another device than the one you asked for.
 
+### How the Apple GPU backend is fast
+
+- Tensors live on the GPU channels-last (MLX's own layout), so convolutions never reshuffle memory.
+- A training step is built as one graph and sent to the GPU at once, instead of waiting after every operation.
+- Custom Metal kernels for BatchNorm statistics (one read of the data instead of several) and max pooling (the
+  gradient goes straight to the winning pixel).
+- BatchNorm followed by an activation (`BatchNorm2D()` then `SiLU()`, `ReLU()`, ...) runs as one fused operation.
+- The next batch of pictures is decoded on the CPU while the GPU trains on the current one.
+
 ### Correctness
 
 Every operation and gradient is tested against PyTorch on the CPU (`tests/test_core.py`, PyTorch as a test oracle
@@ -1840,6 +2077,11 @@ Writes a Jupyter notebook that runs top to bottom:
 
 Open it with Jupyter, VS Code or Colab.
 
+It also writes **`library.md`** next to the notebook: one table of every layer, block, composition tool and model
+tool, with what it builds inside and what you choose ([Library](#workflow-library)). An existing `library.md` is kept
+unless you pass `--overwrite`.
+
+
 ### Inference scripts
 
 | Preset | Does | Run |
@@ -1854,6 +2096,20 @@ All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webc
 ---
 
 ## Changes
+
+### 0.3.9
+
+- `library.md` has an Example column (a ready-to-copy line per layer, block and tool) and full examples: a whole model, Residual, parallel, features, train → save → inference.
+
+### 0.3.8
+
+- `workflow init` also writes `library.md`: every layer, block and tool in one table (also in the docs as Library).
+
+### 0.3.7
+
+- Apple GPU (`mps`) training about 2.7× faster (the init model at 640: 16 → 45 images/s on an M2), same results.
+- The next batch is prepared while the current one trains (all devices).
+- Training shows validation loss, and a per-epoch table (0.3.6).
 
 ### 0.3
 
