@@ -1110,7 +1110,7 @@ Everything you can put in a model, one line each. Write every layer/block on its
 Blocks build their own layers inside: you only pick their arguments, you don't put layers in between.
 Only `wf.stack`, `wf.Residual` and `wf.parallel` take layers you write yourself.
 
-Workflow 0.4.0. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
+Workflow 0.4.1. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
 
 ### Start
 
@@ -2184,6 +2184,12 @@ All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webc
 ---
 
 ## Changes
+
+### 0.4.1
+
+- Upgrading Workflow while a notebook kernel (or any Python session) still has the old version loaded now stops
+  with a plain "restart the session" message, instead of failing part-way with errors such as
+  `'Batches' object has no attribute 'iterate'`.
 
 ### 0.4.0
 
