@@ -32,8 +32,10 @@ workflow devices                               cpu / cuda / mps, and why somethi
 workflow predict detector.nbm photo1.jpg photo2.jpg        # several images
 workflow predict detector.nbm clip.mp4                     # a video, every frame
 workflow predict detector.nbm photos/ --all                # every image in a folder (default: one at random)
-workflow predict detector.nbm shapes.felix --all           # every test image of a Felix dataset</code></pre>
-<p>The model comes first, then the image (or images). Results go to <code>results/</code>: <code>original/</code>, <code>annotated/</code> and <code>predictions.json</code>. Options: <code>-o</code> (another folder), <code>--all</code>, <code>--split train|val|test</code>, <code>--confidence</code>, <code>--iou</code>, <code>--img-size</code>, <code>--device</code>. This is <code>wf.inference</code> from the terminal (<a href="detection.html">Detection</a>).</p>
+workflow predict detector.nbm shapes.felix --all           # every test image of a Felix dataset
+workflow predict detector.nbm webcam                       # live, in a window: ← → or 0–9 switch camera, q quits
+workflow predict detector.nbm webcam:1 --record --mirror   # start on camera 1, save the session, selfie view</code></pre>
+<p>The model comes first, then the image (or images). Results go to <code>results/</code>: <code>original/</code>, <code>annotated/</code> and <code>predictions.json</code>. Options: <code>-o</code> (another folder), <code>--all</code>, <code>--split train|val|test</code>, <code>--confidence</code>, <code>--iou</code>, <code>--img-size</code>, <code>--device</code>, and for the webcam <code>--record</code> and <code>--mirror</code>. This is <code>wf.inference</code> from the terminal (<a href="detection.html">Detection</a>).</p>
 <h2 id="init">init</h2>
 <pre><code>workflow init                                   # → workflow.ipynb
 workflow init detector.ipynb --dataset data.felix --img-size 320 --epochs 50 --device cuda</code></pre>

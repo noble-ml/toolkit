@@ -78,7 +78,7 @@ fit, the error says **what** happened, **why**, and **how to fix it**, naming th
 - **Quantisation**: QAT during training, post-training quantisation, real INT8 / FP16 files.
 - **Export**: `.nbm` at any precision, ONNX (FP32, FP16, INT8 as QDQ).
 - **Inference**: `wf.inference(source, model, output)` on an image, video, folder or Felix dataset (one random test
-  image by default, `all=True` for all), saving originals, annotated copies and `predictions.json`.
+  image by default, `all=True` for all; `"webcam"` for live detection), saving originals, annotated copies and `predictions.json`.
 - **Devices**: `"cpu"`, `"cuda"`, `"gpu"`, `"mps"` (experimental), `"auto"`.
 - **CLI**: `workflow init | info | predict | eval | quantize | export | script | devices`. `workflow init` writes a
   ready-to-run starter notebook.
@@ -943,9 +943,14 @@ wf.inference("shapes.felix", model, "results/all/", all=True)       # every test
 wf.inference("holiday.mp4", model, "results/video/")                # every frame, annotated video saved
 wf.inference("photos/", model, "results/photos/", all=True)         # every image (and video) in the folder
 wf.inference(data.val, model, "results/val/", all=True)             # you pick the pile
+wf.inference("webcam", model)                                       # live, in a window (q to stop)
 ```
 
-**Watch out:** videos need `pip install opencv-python`. The folder can be reused: files are added, and names
+**Webcam:** `"webcam"` opens a window and detects live, with the FPS on the picture. Arrow keys or the number keys
+switch camera (`1` is the second camera), `q` or `Esc` stops; the console lists the keys. Nothing is saved
+unless `record=True`.
+
+**Watch out:** videos and the webcam need `pip install opencv-python`. The folder can be reused: files are added, and names
 never overwrite each other.
 
 #### `model.predict`
@@ -1099,7 +1104,7 @@ Everything you can put in a model, one line each. Write every layer/block on its
 Blocks build their own layers inside: you only pick their arguments, you don't put layers in between.
 Only `wf.stack`, `wf.Residual` and `wf.parallel` take layers you write yourself.
 
-Workflow 0.3.9. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
+Workflow 0.3.10. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
 
 ### Start
 
@@ -1164,7 +1169,7 @@ Input channels are always worked out from the line above. `padding="same"` keeps
 | `model.train(...)` | trains on a Felix split; live bar and per-epoch table; saves `last.nbm` / `best.nbm` | `train`, `validation=`, `epochs=100`, `batch_size=16`, `lr=1e-3`, `device=`, `img_size=`, `optimizer="adamw"`, `patience=30`, `save_every=5`, `output="runs/train"`, `quantization=`, `augment=True`, `ema=True` | `model.train(data.train, validation=data.val, epochs=50, batch_size=16, device="mps")` |
 | `wf.eval(model)` | size, FLOPs, latency, FPS, memory; with `dataset=` also mAP, precision, recall | `dataset=None`, `device=`, `img_size=`, `batch_size=8`, `confidence=0.001`, `iou=0.6` | `wf.eval(model, dataset=data.test)` |
 | `model.save(path)` / `wf.load(path)` | saves / loads a `.nbm` (weights, training state, class names) | the path | `model.save("detector.nbm")` |
-| `wf.inference(source, model, output)` | runs the model on an image, video, folder or Felix dataset; saves `original/`, `annotated/`, `predictions.json` | `all=False` (one random image from a dataset/folder), `split=`, `confidence=0.25`, `iou=0.45`, `img_size=`, `device=`, `batch_size=16` | `wf.inference("photo.jpg", model, "results/")` |
+| `wf.inference(source, model, output)` | runs the model on an image, video, folder, Felix dataset or `"webcam"` (live window; ← → / 0–9 switch camera, q quits); saves `original/`, `annotated/`, `predictions.json` | `all=False` (one random image from a dataset/folder), `split=`, `confidence=0.25`, `iou=0.45`, `img_size=`, `device=`, `batch_size=16`, `record=False`, `mirror=False` (webcam) | `wf.inference("photo.jpg", model, "results/")` |
 | `wf.QAT(...)` | quantisation-aware training: pass as `quantization=` to `model.train` | `precision="int8"` | `model.train(data.train, validation=data.val, epochs=60, quantization=wf.QAT("int8"))` |
 | `model.quantize(...)` | post-training quantisation (also `workflow quantize <model> <type>`) | `precision="int8"`, `calibration=` | `model.quantize("int8", calibration=data.val)` |
 | `model.export(...)` | writes ONNX or `.nbm` | `format="onnx"`, `output=`, `precision="fp32"`, `calibration=`, `img_size=` | `model.export("onnx", output="detector.onnx")` |
@@ -1300,6 +1305,7 @@ model.save("detector.nbm")
 
 model = wf.load("detector.nbm")
 wf.inference("photo.jpg", model, "results/")
+wf.inference("webcam", model)                      # live; q to stop
 ```
 
 ---
@@ -1651,6 +1657,7 @@ run = wf.inference("photo.jpg", model, "results/")
 | a folder | **one** image or video from it, picked at random (`all=True`: every one, not subfolders) |
 | a Felix dataset (`.felix` file or dataset folder) | its **test** split (val if there is no test split, everything if there are no splits), and from it **one** image picked at random (`all=True`: every one) |
 | a loaded dataset or split (`data`, `data.val`, ...) | the same: one random image of the test split, or of exactly the split you pass (`all=True`: every one) |
+| `"webcam"` (or `"webcam:1"`, ...) | live detection from a camera in a window (needs `opencv-python`), see [Webcam](#webcam) |
 | a list of any of these | exactly the items in the list |
 
 Datasets and folders are usually many pictures, so by default `wf.inference` takes one random example to look at:
@@ -1688,10 +1695,35 @@ results/
 | `device` | auto | `"cpu"`, `"cuda"`, `"gpu"`, `"mps"` |
 | `batch_size` | 16 | images (or video frames) per batch |
 | `quiet` | False | hide the progress panel |
+| `record` | False | webcam: save the session (both videos and `predictions.json`) |
+| `mirror` | False | webcam: flip the picture horizontally (selfie view) |
 
 It returns an `Inference`: `.images` (a `Results` for each image, see below), `.videos` (`{name: per-frame detections}`),
 `.output`, `.json` and `.json_path`. Names never collide: two inputs called `photo.png` become `photo.png` and
-`photo_2.png`. From the terminal: `workflow predict detector.nbm clip.mp4` (same rules, `--all`, `--split`, `-o`).
+`photo_2.png`. From the terminal: `workflow predict detector.nbm clip.mp4` (same rules, `--all`, `--split`, `-o`), or `workflow predict detector.nbm webcam`.
+
+#### Webcam
+
+```python
+wf.inference("webcam", model)                                 # camera 0, live, nothing saved
+wf.inference("webcam:1", model, "results/cam/", record=True)  # start on camera 1, save the session
+```
+
+A window opens with the boxes and the FPS drawn on the picture. The keys work while the window has focus; the
+console shows which camera is on and the controls:
+
+| Key | Does |
+|---|---|
+| `→` / `↑` | next camera (after the last one, back to 0) |
+| `←` / `↓` | previous camera |
+| `0`–`9` | that camera (`0` is `"webcam"`, `1` is `"webcam:1"`, ...) |
+| `q`, `Esc` (or closing the window, or Ctrl+C) | stop |
+
+A camera that doesn't exist is reported in the console and the current one keeps running. Without `record=True`
+nothing is written; with it, `original/webcam-<time>.mp4`, `annotated/webcam-<time>.mp4` and `predictions.json`
+(every frame's detections, and `cameras`: which camera was on from which frame). The result's `.videos["webcam"]`
+holds the per-frame detections either way. On a Mac, the app running Python (Terminal, VS Code, Jupyter) needs camera
+access in System Settings → Privacy & Security → Camera. From the terminal: `workflow predict detector.nbm webcam`.
 
 ### Prediction in memory: `model.predict`
 
@@ -2041,11 +2073,13 @@ workflow predict detector.nbm photo1.jpg photo2.jpg        # several images
 workflow predict detector.nbm clip.mp4                     # a video, every frame
 workflow predict detector.nbm photos/ --all                # every image in a folder (default: one at random)
 workflow predict detector.nbm shapes.felix --all           # every test image of a Felix dataset
+workflow predict detector.nbm webcam                       # live, in a window: ← → or 0–9 switch camera, q quits
+workflow predict detector.nbm webcam:1 --record --mirror   # start on camera 1, save the session, selfie view
 ```
 
 The model comes first, then the image (or images). Results go to `results/`: `original/`, `annotated/` and
 `predictions.json`. Options: `-o` (another folder), `--all`, `--split train|val|test`, `--confidence`, `--iou`,
-`--img-size`, `--device`. This is `wf.inference` from the terminal ([Detection](#detection-and-inference)).
+`--img-size`, `--device`, and for the webcam `--record` and `--mirror`. This is `wf.inference` from the terminal ([Detection](#detection-and-inference)).
 
 ### init
 
@@ -2096,6 +2130,12 @@ All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webc
 ---
 
 ## Changes
+
+### 0.3.10
+
+- `wf.inference("webcam", model)` and `workflow predict model.nbm webcam`: live detection in a window, FPS on the picture.
+  `←` `→` (or `↑` `↓`) and `0`–`9` switch camera; the controls and the current camera are shown in the console.
+  `record=True` / `--record` saves the session, `mirror=True` / `--mirror` flips it.
 
 ### 0.3.9
 

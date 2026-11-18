@@ -338,8 +338,10 @@ run = wf.inference("shapes.felix", model, "results/", all=False, split=None, con
 wf.inference("shapes.felix", model, "results/all/", all=True)       # every test picture
 wf.inference("holiday.mp4", model, "results/video/")                # every frame, annotated video saved
 wf.inference("photos/", model, "results/photos/", all=True)         # every image (and video) in the folder
-wf.inference(data.val, model, "results/val/", all=True)             # you pick the pile</code></pre>
-<p><strong>Watch out:</strong> videos need <code>pip install opencv-python</code>. The folder can be reused: files are added, and names never overwrite each other.</p>
+wf.inference(data.val, model, "results/val/", all=True)             # you pick the pile
+wf.inference("webcam", model)                                       # live, in a window (q to stop)</code></pre>
+<p><strong>Webcam:</strong> <code>"webcam"</code> opens a window and detects live, with the FPS on the picture. Arrow keys or the number keys switch camera (<code>1</code> is the second camera), <code>q</code> or <code>Esc</code> stops; the console lists the keys. Nothing is saved unless <code>record=True</code>.</p>
+<p><strong>Watch out:</strong> videos and the webcam need <code>pip install opencv-python</code>. The folder can be reused: files are added, and names never overwrite each other.</p>
 <h3 id="model-predict"><code>model.predict</code></h3>
 <p><strong>Toddler words:</strong> "what's in this picture?", answered straight back to you in Python.</p>
 <p><strong>Why you'd use it:</strong> inside your own code, when you want the boxes as data and not a folder of files (for example in a camera loop). <code>wf.inference</code> is built on it.</p>
