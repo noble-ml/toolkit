@@ -1104,7 +1104,7 @@ Everything you can put in a model, one line each. Write every layer/block on its
 Blocks build their own layers inside: you only pick their arguments, you don't put layers in between.
 Only `wf.stack`, `wf.Residual` and `wf.parallel` take layers you write yourself.
 
-Workflow 0.3.10. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
+Workflow 0.3.11. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
 
 ### Start
 
@@ -1709,7 +1709,7 @@ wf.inference("webcam", model)                                 # camera 0, live, 
 wf.inference("webcam:1", model, "results/cam/", record=True)  # start on camera 1, save the session
 ```
 
-A window opens with the boxes and the FPS drawn on the picture. The keys work while the window has focus; the
+A window called Workflow opens with the boxes (labels on solid tags, sized to the picture) and the FPS in the bottom-left. The keys work while the window has focus; the
 console shows which camera is on and the controls:
 
 | Key | Does |
@@ -2130,6 +2130,10 @@ All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webc
 ---
 
 ## Changes
+
+### 0.3.11
+
+- Webcam window: thicker boxes and bigger labels on solid colour tags (both scale with the picture), FPS in the bottom-left, the window is just called "Workflow".
 
 ### 0.3.10
 
