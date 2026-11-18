@@ -18,7 +18,7 @@ th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
 </style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html" class="on">Install</a><a href="getting-started.html">Getting started</a><a href="api.html">API</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="install">Install</h1>
 <h2 id="colab-notebooks-direct-link">Colab / notebooks (direct link)</h2>
-<pre><code>!pip install <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/files/felix-0.4.2-py3-none-any.whl</code></pre>
+<pre><code>!pip install <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/files/felix-0.5.0-py3-none-any.whl</code></pre>
 <p>A direct wheel URL needs no extra flags: pip fetches NumPy and rich from PyPI itself, and there is no name clash because it never searches an index for <code>felix</code>. Replace the version in the file name for other releases (all wheels stay on the site).</p>
 <h2 id="anywhere-else-index">Anywhere else (index)</h2>
 <pre><code>pip install numpy rich
@@ -26,7 +26,7 @@ pip install --no-deps --no-index --find-links <span class="base" data-up="1">htt
 <p>That's it. Works the same on Linux, macOS and Windows (Python 3.8+). Check with <code>felix --version</code>.</p>
 <p>Why the extra flags:</p>
 <ul><li><strong><code>--no-index</code></strong>: pip must not search PyPI. A *different, public* package called <code>felix</code> lives there and would be installed instead of this one. Never use <code>--extra-index-url</code> for Felix.</li><li><strong><code>--no-deps</code></strong> and the separate <code>pip install numpy rich</code>: with <code>--no-index</code> pip can't fetch dependencies from this page, so install them first the normal way.</li></ul>
-<p>Upgrade to the newest version by adding <code>--upgrade</code>; pin one with <code>felix==0.4.2</code>.</p>
+<p>Upgrade to the newest version by adding <code>--upgrade</code>; pin one with <code>felix==0.5.0</code>.</p>
 <p>Try the example pipeline: download <a href="examples/animals.py">animals.py</a> and <a href="examples/assets/bicycle.png">bicycle.png</a> (keep it in an <code>assets/</code> folder next to the script), then run <code>python animals.py</code>.</p>
 <h2 id="jpeg">JPEG</h2>
 <p>Felix reads and writes PNG on its own. Reading JPEG (for example Roboflow exports with <code>.jpg</code> images, or JPEG sprites and backgrounds) needs Pillow: <code>pip install Pillow</code>. Without it Felix explains what is missing.</p>

@@ -73,7 +73,8 @@ fit, the error says **what** happened, **why**, and **how to fix it**, naming th
 - **Blocks**: `Bottleneck`, `CSP`, `SPP`, `SPPF`, `SE`, `CBAM`, `Focus`.
 - **Composition**: `wf.input`, `wf.stack`, `wf.Residual`, `wf.parallel`, `wf.feature`, `wf.concat`, `wf.add`, `wf.FPN`, `wf.PAN`, `wf.head`.
 - **Training**: one call with sensible defaults (AdamW, warm-up + cosine, GIoU + BCE loss, EMA, early stopping,
-  `.nbm` checkpoints, safe Ctrl+C, continuing from a saved model).
+  `.nbm` checkpoints, crash protection: safe Ctrl+C / kill, autosave mid-epoch, exact resume; automatic low-memory
+  mode on small machines).
 - **Evaluation**: `wf.eval(model)` (size, FLOPs, latency, FPS, memory) and `wf.eval(model, dataset=val)` (accuracy).
 - **Quantisation**: QAT during training, post-training quantisation, real INT8 / FP16 files.
 - **Export**: `.nbm` at any precision, ONNX (FP32, FP16, INT8 as QDQ).
@@ -103,7 +104,7 @@ Why the flags: `--no-index` keeps pip from installing the unrelated public packa
 ### Colab / notebooks
 
 ```
-!pip install BASE_URL/files/felix-0.4.2-py3-none-any.whl BASE_URL/files/workflow-0.3.9-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.5.0-py3-none-any.whl BASE_URL/files/workflow-0.4.0-py3-none-any.whl
 ```
 
 Direct wheel URLs need no flags; pip fetches the dependencies from PyPI. Colab GPUs work with `device="cuda"`.
@@ -838,7 +839,8 @@ model.device()            # which one am I on?
 #### `model.train`
 
 **Toddler words:** look at lots of pictures and their answers, again and again, until you get good. Press Ctrl+C
-and it saves before stopping.
+and it saves before stopping. It also saves by itself every 10 minutes, so if the computer crashes or the power goes
+out, you lose minutes, not hours: load `last.nbm` and train again, and it carries on from the same step.
 
 **Why you'd use it:** this is learning. The defaults (optimizer, learning-rate schedule, loss, augmentation,
 checkpoints) are sensible, so most of the time you only set the data and `epochs`.
@@ -846,8 +848,12 @@ checkpoints) are sensible, so most of the time you only set the data and `epochs
 ```python
 model.train(data.train, validation=data.val, epochs=50, batch_size=16, lr=1e-3, device="auto",
             img_size=None, optimizer="adamw", patience=30, save_every=5, output="runs/train",
-            quantization=None, augment=True, ema=True)
+            quantization=None, augment=True, ema=True, low_memory=None, autosave=10)
 ```
+
+**Not enough memory?** On CPU it checks first. If the batch won't fit it turns on `low_memory` (it forgets the
+in-between results and works them out again when it needs them: same answers, a bit slower), and if even that won't
+fit it tells you the biggest `batch_size` that does, before wasting any time.
 
 While it learns you see a bar, plus a table that gains a line every epoch: the training loss, the validation loss
 (how wrong it is on pictures it doesn't learn from) and the mAP scores. If the training loss keeps falling but the
@@ -1104,7 +1110,7 @@ Everything you can put in a model, one line each. Write every layer/block on its
 Blocks build their own layers inside: you only pick their arguments, you don't put layers in between.
 Only `wf.stack`, `wf.Residual` and `wf.parallel` take layers you write yourself.
 
-Workflow 0.3.11. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
+Workflow 0.4.0. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
 
 ### Start
 
@@ -1803,6 +1809,8 @@ own splits are used.
 | `ema` | True | keep a moving average of the weights; it is validated and saved |
 | `loss_weights` | (5, 1, 1) | box, confidence, class |
 | `quiet` | False | hide the progress panel |
+| `low_memory` | auto | `True`: recompute activations during backward instead of keeping them (identical results, ~30% slower, ~40% less memory); auto turns it on by itself on CPU when needed (see Memory) |
+| `autosave` | 10 | minutes between mid-epoch saves of `last.nbm` (`None` turns it off; see Crash protection) |
 
 Returns the history: one dict per epoch (`epoch`, `loss`, `box`, `obj`, `cls`, `lr`, `seconds`, and with validation
 `val_loss`, `val_box`, `val_obj`, `val_cls`, `map50`, `map50_95`, `precision`, `recall`, `f1`, `fitness`). It is also kept in `model.history`.
@@ -1856,10 +1864,45 @@ Two things adapt, one doesn't:
 - **Stability**: gradients clipped at norm 10; a NaN/inf loss stops training with an explanation.
 - **Best model**: highest `0.1 × mAP50 + 0.9 × mAP50-95` on the validation data (lowest loss without validation).
 
-### Ctrl+C
+### Crash protection
 
-Training stops at once, the current state is saved to `output/last.nbm`, and `model.train` returns the history
-so far.
+- **Ctrl+C, `kill`, closing a service (SIGTERM)**: training finishes the step it is on (a few seconds), saves
+  `output/last.nbm` with the exact position (epoch *and* step), and `model.train` returns the history so far. A second
+  Ctrl+C stops at once.
+- **Autosave**: inside an epoch, `last.nbm` is also saved every `autosave` minutes (default 10). A power cut, an
+  out-of-memory kill or a crashed machine loses at most those minutes, not the epoch (an epoch at 640 px on a laptop
+  CPU can take over an hour).
+- **Errors**: if anything else goes wrong (a broken image, a full disk, ...), progress up to the last finished step is
+  saved before the error is shown. A NaN / infinite loss is the exception: those weights are broken, so the last good
+  save is kept.
+- **Safe files**: checkpoints are written to a temporary file, flushed to disk and then renamed over the old one,
+  so a crash during a save leaves the previous checkpoint, never half a file.
+
+To continue, load `last.nbm` and train again with the same arguments:
+
+```python
+model = wf.load("runs/train/last.nbm")
+model.train(train, validation=val, epochs=100)     # "continuing epoch 7 from step 412 of 996"
+```
+
+It resumes at the same step, with the same shuffled order for that epoch, the same optimizer state, EMA, and
+BatchNorm statistics; without augmentation the result is the same as a run that never stopped.
+
+### Memory
+
+Each training step keeps every layer's output until the backward pass has used it, so memory grows with batch size,
+picture size and model width. On CPU (Linux), training first measures what one step needs (a forward and backward pass
+on one blank picture, taking a moment) and compares it with free RAM:
+
+- **It fits**: normal training.
+- **It fits only with low-memory mode**: it is switched on and a note says so. Each Conv → BatchNorm → activation unit
+  and each block keeps only its input; its insides are recomputed during backward. Same numbers (gradients and
+  BatchNorm statistics match normal training), about 30% slower, about 40% less memory.
+- **It doesn't fit at all**: training stops before it starts, with the largest `batch_size` that fits, instead of the
+  system killing it an hour in.
+
+Pass `low_memory=True` to force it on any device, or `False` to turn the check off. Datasets are read from disk as
+needed, so their size doesn't matter; only the batch does.
 
 ### Continuing
 
@@ -1874,9 +1917,20 @@ saved optimizer state doesn't fit the model, a fresh optimizer is created with a
 
 ### Speed
 
-Measured on the demo detector (1.3M parameters, 256×256, batch 16): about 32 images/s on an Apple M-series CPU,
-about 47 images/s on a GTX 1050. The `workflow init` model at 640×640, batch 16, on an Apple M2 GPU (`device="mps"`):
-about 45 images/s (0.3.7; 16 before).
+Measured on the demo detector (1.3M parameters, 256×256, batch 16): about 47 images/s on a GTX 1050. The
+`workflow init` model at 640×640, batch 16, on an Apple M2 GPU (`device="mps"`): about 45 images/s (0.3.7; 16 before).
+
+On CPU (0.4), the `workflow init` model on a 2012 laptop (Intel i5-3210M, 2 cores, AVX, 4 GB RAM):
+
+| | 0.3 | 0.4 |
+|---|---|---|
+| 320×320, batch 16 | 3.5 images/s | 11.7 images/s |
+| one epoch, 642 pictures at 320, with validation | 182 s | 52 s |
+| 640×640, batch 16 | 0.76 images/s (2.8 GB) | 3.0 images/s (1.8 GB) |
+
+What changed: convolutions use a packed, register-blocked matrix multiply (the BLIS design) that reads the picture
+directly instead of building a 9× larger copy first; BatchNorm and the activation run as one vectorised pass; and
+backward frees each layer's saved values as soon as they are used. All of it is plain fp32 with the same results.
 
 The cost of a step grows with the picture area: 640×640 is 2.4× the work of 416×416 and 4× of 320×320. If your
 objects aren't tiny, a smaller `img_size` is the biggest speed-up there is. Workflow's kernels are its own; they are slower than cuDNN-backed frameworks on
@@ -2130,6 +2184,22 @@ All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webc
 ---
 
 ## Changes
+
+### 0.4.0
+
+- **CPU training 3.3–4× faster** (the `workflow init` model on a 2-core 2012 laptop: 3.5 → 11.7 images/s at
+  320 px, 0.76 → 3.0 at 640 px), with the same results:
+  - convolutions use a packed, register-blocked matrix multiply (6×16 micro-kernel; AVX, AVX2+FMA or NEON) that
+    reads the picture directly (no im2col copy), forward, weight gradient and stride-1 input gradient;
+  - BatchNorm + activation run as one vectorised pass and the BatchNorm output is no longer stored;
+  - vectorised exp / sigmoid / SiLU; multi-threaded upsample and pooling backward; vectorised max pooling.
+- **Less memory**: backward frees what each layer kept as soon as it is used (640 px batch 16: 2.8 GB in 0.3 → 1.8 GB).
+- **`low_memory=`** for `model.train`: recompute activations instead of keeping them (identical gradients and
+  BatchNorm statistics, ~30% slower, ~40% less memory). On CPU it is chosen automatically when needed, and a run
+  that cannot fit stops before it starts, with the batch size that fits.
+- **Crash protection**: autosave of `last.nbm` every 10 minutes inside an epoch (`autosave=`), exact resume at the
+  saved step (reproducible shuffling), Ctrl+C and SIGTERM stop at the end of the step, other errors save first,
+  checkpoints are flushed to disk before replacing the old file.
 
 ### 0.3.11
 

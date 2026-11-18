@@ -23,6 +23,7 @@ felix pack FOLDER [-o OUT.felix]      folder -&gt; single compressed .felix
 felix unpack FILE.felix [-o FOLDER]   .felix -&gt; folder
 felix info PATH                       summary + per-class box counts (folder or .felix)
 felix partition SRC (--parts N | ...)  split a dataset into several smaller datasets
+felix split SRC 0.5 [-o OUT]          a smaller copy (here half) for quick experiments; SRC is unchanged
 felix convert coco SRC -o OUT         Roboflow/COCO -&gt; Felix
 felix --version</code></pre>
 <p>All writing commands refuse to overwrite existing output unless <code>--overwrite</code> is given.</p>
@@ -37,6 +38,13 @@ felix partition data.felix --by-split                    # one piece per train /
 <p>Other options:</p>
 <table><thead><tr><th>Option</th><th>Meaning</th></tr></thead><tbody><tr><td><code>-o, --output DIR</code></td><td>folder that receives the pieces (default <code>&lt;source&gt;_parts</code>)</td></tr><tr><td><code>--names A,B,...</code></td><td>piece names, one per piece (default <code>part1</code>, <code>part2</code>, ...)</td></tr><tr><td><code>--shuffle</code>, <code>--seed S</code></td><td>shuffle before splitting, reproducibly (default: keep the dataset's order)</td></tr><tr><td><code>--pack</code> / <code>--folders</code></td><td>write <code>.felix</code> files or folders (default: the same kind as the source)</td></tr><tr><td><code>--overwrite</code></td><td>replace existing pieces</td></tr></tbody></table>
 <p>Every pair lands in exactly one piece. Files keep their names (<code>IMG42.png</code> stays <code>IMG42.png</code>), and each piece's <code>metadata.yml</code> records where it came from (<code>partition: {source, name, index, of}</code>). With <code>--ratio</code>, leftover pairs go to the pieces with the largest remainders.</p>
+<h2 id="a-smaller-copy-for-experiments-felix-split">A smaller copy for experiments: <code>felix split</code></h2>
+<pre><code>felix split voc.felix 0.5                 # → voc_split_50.felix, half the pairs; voc.felix is unchanged
+felix split voc.felix 0.1 --seed 2        # → voc_split_10.felix, another random tenth
+felix split voc.felix --size 1000         # → voc_split_1000.felix, exactly 1000 pairs
+felix split ./data 0.25 -o small          # a folder dataset → folder copy "small"</code></pre>
+<p>The copy is a complete dataset like any other. Every train / val / test split keeps the same share (half of train, half of val, half of test), and every pair stays in the split it was in, so test pictures never become training pictures. Which pairs are picked is random but repeatable: the same <code>--seed</code> (default 0) gives the same subset. A split that had pairs keeps at least one. <code>metadata.yml</code> records where it came from (<code>split_from: {source, pairs, seed, fraction}</code>).</p>
+<table><thead><tr><th>Option</th><th>Meaning</th></tr></thead><tbody><tr><td><code>fraction</code></td><td>share to keep, above 0 and at most 1 (<code>0.5</code> = half; <code>50</code> is refused with a hint)</td></tr><tr><td><code>--size N</code></td><td>keep N pairs instead of a fraction</td></tr><tr><td><code>-o OUT</code></td><td>output path (default <code>&lt;name&gt;_split_&lt;percent&gt;.felix</code>, or a folder for a folder source)</td></tr><tr><td><code>--seed S</code></td><td>which random subset</td></tr><tr><td><code>--overwrite</code></td><td>replace an existing output (never the source)</td></tr></tbody></table>
 <h2 id="converting-a-roboflow-coco-export">Converting a Roboflow COCO export</h2>
 <p>Export from Roboflow in <strong>COCO</strong> format, then:</p>
 <pre><code>felix convert coco ./my-export       -o ./my-felix-dataset

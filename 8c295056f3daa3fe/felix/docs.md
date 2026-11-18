@@ -54,7 +54,7 @@ pip install --no-deps --no-index --find-links BASE_URL/simple/felix/ felix
 ### Colab / notebooks (direct link)
 
 ```
-!pip install BASE_URL/files/felix-0.4.2-py3-none-any.whl
+!pip install BASE_URL/files/felix-0.5.0-py3-none-any.whl
 ```
 
 A direct wheel URL needs no extra flags: pip fetches NumPy and rich from PyPI itself, and
@@ -77,7 +77,7 @@ Why the extra flags:
 - **`--no-deps`** and the separate `pip install numpy rich`: with `--no-index` pip can't fetch
   dependencies from this page, so install them first the normal way.
 
-Upgrade to the newest version by adding `--upgrade`; pin one with `felix==0.4.2`.
+Upgrade to the newest version by adding `--upgrade`; pin one with `felix==0.5.0`.
 
 Try the example pipeline: download [animals.py](examples/animals.py) and
 [bicycle.png](examples/assets/bicycle.png) (keep it in an `assets/` folder next to the script), then
@@ -282,6 +282,11 @@ read API (`len`, `stems`, `annotation`, `image`, iteration, `classes`, `metadata
 Split a dataset into several complete datasets; the Python form of [`felix partition`](#cli). Give exactly one of
 `parts=N`, `ratio=(80, 10, 10)`, `size=K` or `by_split=True`. `source` is a path or a loaded `Dataset`.
 
+#### `fx.split(source, fraction=None, output=None, *, size=None, seed=0, overwrite=False, quiet=False)` → path
+A smaller copy of a dataset for quick experiments; the Python form of [`felix split`](#cli). `fx.split("voc.felix",
+0.5)` writes `voc_split_50.felix` with half the pairs (the same share of each split, each pair in its original split)
+and leaves the source unchanged. `size=N` keeps N pairs instead; `seed` picks which subset.
+
 #### `felix.raster.Image`
 What `ds.image(stem)` returns: an RGB or RGBA image backed by a NumPy array. `.size`, `.width`, `.height`,
 `.mode`, `.array` (uint8, height × width × channels), `.convert("RGB" | "RGBA")`, `.getpixel((x, y))`, `.tobytes()`,
@@ -307,6 +312,7 @@ felix pack FOLDER [-o OUT.felix]      folder -> single compressed .felix
 felix unpack FILE.felix [-o FOLDER]   .felix -> folder
 felix info PATH                       summary + per-class box counts (folder or .felix)
 felix partition SRC (--parts N | ...)  split a dataset into several smaller datasets
+felix split SRC 0.5 [-o OUT]          a smaller copy (here half) for quick experiments; SRC is unchanged
 felix convert coco SRC -o OUT         Roboflow/COCO -> Felix
 felix --version
 ```
@@ -347,6 +353,29 @@ Other options:
 Every pair lands in exactly one piece. Files keep their names (`IMG42.png` stays `IMG42.png`), and each piece's
 `metadata.yml` records where it came from (`partition: {source, name, index, of}`). With `--ratio`, leftover pairs
 go to the pieces with the largest remainders.
+
+### A smaller copy for experiments: `felix split`
+
+```
+felix split voc.felix 0.5                 # → voc_split_50.felix, half the pairs; voc.felix is unchanged
+felix split voc.felix 0.1 --seed 2        # → voc_split_10.felix, another random tenth
+felix split voc.felix --size 1000         # → voc_split_1000.felix, exactly 1000 pairs
+felix split ./data 0.25 -o small          # a folder dataset → folder copy "small"
+```
+
+The copy is a complete dataset like any other. Every train / val / test split keeps the same share (half of train,
+half of val, half of test), and every pair stays in the split it was in, so test pictures never become training
+pictures. Which pairs are picked is random but repeatable: the same `--seed` (default 0) gives the same subset.
+A split that had pairs keeps at least one. `metadata.yml` records where it came from
+(`split_from: {source, pairs, seed, fraction}`).
+
+| Option | Meaning |
+|---|---|
+| `fraction` | share to keep, above 0 and at most 1 (`0.5` = half; `50` is refused with a hint) |
+| `--size N` | keep N pairs instead of a fraction |
+| `-o OUT` | output path (default `<name>_split_<percent>.felix`, or a folder for a folder source) |
+| `--seed S` | which random subset |
+| `--overwrite` | replace an existing output (never the source) |
 
 ### Converting a Roboflow COCO export
 
