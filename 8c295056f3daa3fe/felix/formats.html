@@ -22,6 +22,18 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 ├── images/IMG1.png ...        (converted datasets may keep .jpg)
 ├── annotations/IMG1.yml ...
 └── metadata.yml</code></pre>
+<h2 id="class-folders-classification">Class folders (classification)</h2>
+<p>An ImageNet-style folder is a dataset as it is: one folder per class with its images, optionally inside <code>train/</code>, <code>val/</code> and <code>test/</code> (also <code>valid</code>, <code>validation</code>, <code>training</code>, <code>testing</code>).</p>
+<pre><code>animals/                      animals/
+├── cat/001.jpg …             ├── train/cat/… dog/…
+├── dog/…                     ├── val/cat/… dog/…
+└── bird/…                    └── test/cat/… dog/…</code></pre>
+<p><code>fx.load("animals/")</code> reads it without writing anything next to the images: the class names are the folder names (in natural order, ids follow), each image is one pair, and its annotation is made up on the fly:</p>
+<pre><code>image: cat/001.jpg
+split: train
+class: cat
+class_id: 1</code></pre>
+<p>with <code>metadata.yml</code> holding <code>task: classification</code>, the classes and the split counts. Without split folders every class is split 80 / 10 / 10 on its own (stratified, seed 0, the same every time). PNG, JPEG, BMP, WebP, GIF and TIFF are read; hidden files and folders (<code>.</code> or <code>_</code> first) are skipped. <code>felix pack</code> turns it into a regular <code>.felix</code> file with those annotations, and <code>felix info</code>, <code>split</code> and <code>partition</code> work on both.</p>
 <h2 id="felix"><code>.felix</code></h2>
 <p>A single file for the same tree - a standard ZIP archive (PNG/JPEG stored, YAML deflated), so <code>unzip</code> and Python's <code>zipfile</code> can open it. <code>felix pack</code> / <code>felix unpack</code> convert between the two; <code>fx.make(output="x.felix")</code> writes it directly (via a <code>.part</code> file, so a crash never leaves a half-written dataset).</p>
 <h2 id="annotations-img1-yml"><code>annotations/IMG1.yml</code></h2>

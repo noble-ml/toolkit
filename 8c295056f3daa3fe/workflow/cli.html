@@ -16,7 +16,7 @@ table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflo
 th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
-</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="cookbook.html">Cookbook</a><a href="library.html">Library</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="composition.html">Composition</a><a href="model.html">Model</a><a href="detection.html">Detection</a><a href="training.html">Training</a><a href="evaluation.html">Evaluation</a><a href="quantization.html">Quantisation</a><a href="devices.html">Devices</a><a href="errors.html">Errors</a><a href="cli.html" class="on">CLI</a><a href="changes.html">Changes</a></nav><h1 id="cli">CLI</h1>
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="cookbook.html">Cookbook</a><a href="library.html">Library</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="composition.html">Composition</a><a href="model.html">Model</a><a href="detection.html">Detection</a><a href="classification.html">Classification</a><a href="training.html">Training</a><a href="evaluation.html">Evaluation</a><a href="quantization.html">Quantisation</a><a href="devices.html">Devices</a><a href="errors.html">Errors</a><a href="cli.html" class="on">CLI</a><a href="changes.html">Changes</a></nav><h1 id="cli">CLI</h1>
 <p><code>workflow</code> (or <code>python -m workflow</code>), in the same minimal style as Felix.</p>
 <pre><code>workflow init [NOTEBOOK.ipynb] [--dataset D]    starter notebook: small model, benchmarks before/after, saving
 workflow info MODEL.nbm                        classes, precision, training progress, layer summary
@@ -25,8 +25,15 @@ workflow eval MODEL.nbm [--dataset D --split test]   size/FLOPs/FPS, plus accura
 workflow quantize MODEL.nbm int8|fp16|fp32 [--calibration D] [-o OUT]   post-training quantisation
 workflow export MODEL.nbm --format onnx|nbm [--precision ...] [-o OUT]
 workflow script MODEL.nbm --preset image|folder|video|webcam    write an inference script
-workflow devices                               cpu / cuda / mps, and why something is unavailable</code></pre>
+workflow devices                               cpu / cuda / mps, and why something is unavailable
+workflow library [SEARCH]                     browse every layer, block and tool; type to search</code></pre>
 <p><code>quantize</code> writes <code>MODEL-&lt;type&gt;.nbm</code> by default and prints the size before and after. Commands never overwrite existing files without <code>--overwrite</code>. Errors print the what / why / fix explanation and exit with status 1.</p>
+<h2 id="browsing-the-library-workflow-library">Browsing the library: <code>workflow library</code></h2>
+<pre><code>workflow library                 # every layer, block and tool, grouped; ↑↓ to move
+workflow library residual        # start with a search</code></pre>
+<p>A full-screen browser in the same look as the rest of the CLI. On the left, everything you can use, grouped, with its arguments under each name; type anywhere to search (every word must match; name matches come first). On the right, the whole entry: what it does, the toddler-words explanation, why you'd use it, examples, the catch, and the exact signature from the code.</p>
+<table><thead><tr><th>Key</th><th>Does</th></tr></thead><tbody><tr><td>↑ ↓</td><td>move through the list (or scroll the entry, after Tab)</td></tr><tr><td>Tab / → / Enter</td><td>read the entry: ↑ ↓ then scroll it; Shift+Tab / ← goes back</td></tr><tr><td>PgUp / PgDn</td><td>scroll the entry</td></tr><tr><td>Home / End</td><td>first / last entry</td></tr><tr><td>typing, Backspace</td><td>search</td></tr><tr><td>Esc</td><td>back to the list, then clear the search, then quit (Ctrl+C quits at once)</td></tr></tbody></table>
+<p>It needs a terminal (not a notebook or a pipe). The content is the same as the docs, shipped inside the package, so it works offline and always matches the installed version.</p>
 <h2 id="predict">predict</h2>
 <pre><code>workflow predict detector.nbm photo.jpg                    # one image → results/
 workflow predict detector.nbm photo1.jpg photo2.jpg        # several images

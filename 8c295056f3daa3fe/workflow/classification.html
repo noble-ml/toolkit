@@ -1,0 +1,97 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>workflow · classification</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="cookbook.html">Cookbook</a><a href="library.html">Library</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="composition.html">Composition</a><a href="model.html">Model</a><a href="detection.html">Detection</a><a href="classification.html" class="on">Classification</a><a href="training.html">Training</a><a href="evaluation.html">Evaluation</a><a href="quantization.html">Quantisation</a><a href="devices.html">Devices</a><a href="errors.html">Errors</a><a href="cli.html">CLI</a><a href="changes.html">Changes</a></nav><h1 id="classification">Classification</h1>
+<p>A classification model gives one label per picture ("cat"), instead of boxes. It is the same <code>wf.stack</code> you already write, ending in <code>wf.head(..., type="cls")</code>, trained on a folder of class folders.</p>
+<h2 id="the-data-class-folders">The data: class folders</h2>
+<p>The usual ImageNet layout, one folder per class with its pictures inside. <code>fx.load</code> reads it as it is: nothing is copied or written next to the images.</p>
+<pre><code>animals/                      animals/
+├── cat/                      ├── train/
+│   ├── 001.jpg               │   ├── cat/ …
+│   └── …                     │   └── dog/ …
+├── dog/                      ├── val/
+└── bird/                     │   ├── cat/ …
+                              │   └── dog/ …
+                              └── test/ …</code></pre>
+<ul><li><strong>Class folders only</strong> (left): every class is split 80 / 10 / 10 into train / val / test *on its own*, so each split has every class in the same proportion. The split is fixed (seed 0): the same folder always gives the same splits.</li><li><strong>train/ val/ test/ folders</strong> (right; <code>valid</code>, <code>validation</code>, <code>training</code>, <code>testing</code> work too): those splits are used.</li><li>Class names are the folder names, in natural order (<code>class2</code> before <code>class10</code>); class ids follow that order.</li><li>Images can be PNG, JPEG, BMP, WebP, GIF or TIFF, any size, nested any depth inside a class folder. Hidden files and folders (starting with <code>.</code> or <code>_</code>) are skipped.</li></ul>
+<pre><code>import felix as fx
+
+data = fx.load("animals/")
+data.task        # "classification"
+data.classes     # ['bird', 'cat', 'dog']
+data.splits      # {'train': 2400, 'val': 300, 'test': 300}</code></pre>
+<p>Everything else in Felix works on it: <code>felix info animals/</code> (images per class and split), <code>felix pack animals/ -o animals.felix</code> (one file), <code>felix split animals/ 0.1</code> (a tenth, keeping every class's share in every split), <code>felix partition</code>.</p>
+<h2 id="the-head">The head</h2>
+<pre><code>wf.head(classes=3, channels=None, type="cls")</code></pre>
+<table><thead><tr><th>Argument</th><th>Meaning</th></tr></thead><tbody><tr><td><code>classes</code></td><td>how many classes (must match the dataset; training checks)</td></tr><tr><td><code>channels</code></td><td><code>None</code>: pool the last feature map as it is. A number: first widen it with a 1×1 Conv-BN-SiLU to that many channels (e.g. 1024 or 1280, as large classifiers do)</td></tr><tr><td><code>type</code></td><td><code>"cls"</code> (or <code>"classify"</code>) for classification; <code>"bbox"</code> (the default) for detection</td></tr></tbody></table>
+<p>Inside: (optional 1×1 Conv-BN-SiLU) → global average pooling → a fully connected layer (a 1×1 convolution) with one logit per class. The output is <code>(classes, 1, 1)</code>. After a pyramid (FPN / PAN) it uses the last, deepest map. The class biases start at zero, so every class starts equally likely.</p>
+<h2 id="a-model">A model</h2>
+<pre><code>import felix as fx
+import workflow as wf
+
+data = fx.load("animals/")
+
+model = wf.stack(
+    wf.input(channels=3, height=224, width=224),
+
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),     # 224 → 112
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),     # 112 → 56
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(out_channels=64, n=1),
+
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),    # 56 → 28
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(out_channels=128, n=2),
+
+    wf.Conv2D(256, kernel_size=3, stride=2, padding="same"),    # 28 → 14
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(out_channels=256, n=2),
+
+    wf.head(classes=len(data.classes), channels=512, type="cls"),
+)
+
+model.train(data, epochs=50, batch_size=32)</code></pre>
+<p>ResNet-style networks are a few lines too: <code>wf.Residual(...)</code> with the default <code>shortcut="auto"</code> adds the 1×1 projection wherever a block changes channels or size.</p>
+<h2 id="training">Training</h2>
+<p><code>model.train</code> is the same call as for detection; with a classification head it:</p>
+<ul><li>uses softmax cross-entropy with label smoothing 0.1 (the target is 90% the right class, 10% spread over all);</li><li>augments with a random crop (25–100% of the area, aspect 3:4 to 4:3), a horizontal flip and brightness / contrast jitter; validation and testing use the whole picture;</li><li>reports the training loss, the validation loss and <strong>top-1 / top-5 accuracy</strong> each epoch, and keeps <code>best.nbm</code> by 0.9 · top-1 + 0.1 · top-5;</li><li>keeps everything else: AdamW, warm-up + cosine schedule, EMA weights, early stopping, autosave, exact resume, <code>low_memory</code>, every device.</li></ul>
+<pre><code>epoch   train loss   val loss   top-1   top-5
+    1        1.055      0.931   0.470   1.000
+    2        0.771      0.702   0.830   1.000  ← best</code></pre>
+<p>A classification model refuses a dataset with boxes (and a detector refuses class folders), saying which head to use.</p>
+<h2 id="evaluation">Evaluation</h2>
+<pre><code>result = wf.eval(model, dataset=data.test)
+result.top1, result.top5      # accuracy
+result.per_class              # [{"class": "cat", "images": 300, "accuracy": 0.93}, ...]
+result.confusion_matrix       # rows: true class, columns: predicted class</code></pre>
+<p><code>show()</code> prints the size / speed table, top-1, top-5, the cross-entropy and the accuracy of every class.</p>
+<h2 id="predicting">Predicting</h2>
+<pre><code>r = model.predict("photo.jpg")
+r.class_name, r.confidence    # "cat", 0.93
+r.top                         # the five best: [{"class": "cat", "class_id": 1, "confidence": 0.93}, ...]
+r.probabilities               # one per class, summing to 1
+r.save("labelled.png")        # the picture with its label (and the runners-up) in the top-left corner</code></pre>
+<p><code>wf.inference(source, model, output)</code> and <code>workflow predict</code> work as for detection, on images, folders, videos, datasets and the webcam: annotated pictures get the label tag, and <code>predictions.json</code> holds <code>class</code>, <code>class_id</code>, <code>confidence</code> and <code>top</code> for each image.</p>
+<h2 id="export">Export</h2>
+<p><code>model.export("onnx")</code> writes the logits (<code>(N, classes, 1, 1)</code>); apply a softmax to get probabilities. The <code>.nbm</code> file records the task (<code>"classify"</code>), so <code>wf.load</code> gives back a classifier.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

@@ -14,7 +14,7 @@
 
 A lightweight dataset pipeline generator for object detection. Describe classes and a
 generation step in a few lines of Python; Felix renders images, tight bounding boxes and
-metadata. Felix renders with its own NumPy backend (shapes, transforms, compositing, PNG) and needs only NumPy and
+metadata. It also reads ImageNet-style classification folders (one folder per class) as datasets, as they are. Felix renders with its own NumPy backend (shapes, transforms, compositing, PNG) and needs only NumPy and
 rich; Pillow is optional, for JPEG files. Works on Linux, macOS and Windows (Python 3.8+).
 
 ```python
@@ -266,7 +266,8 @@ otherwise a folder. Refuses to overwrite an existing dataset unless `overwrite=T
 live progress panel (disable with `quiet=True`). Returns `{"pairs", "seed", "boxes", "output"}`.
 
 #### `fx.load(path)` → `Dataset`
-Read a folder or `.felix`: `len(ds)`, `ds.metadata`, `ds.stems`, `ds.classes` (names ordered by class id),
+Read a dataset folder, a `.felix` file, or an ImageNet-style folder of class folders (see [Formats](#dataset-formats);
+`ds.task` is then `"classification"`, otherwise `"detection"`): `len(ds)`, `ds.metadata`, `ds.stems`, `ds.classes` (names ordered by class id),
 `ds.annotation(stem)`, `ds.image(stem)` (a Felix `Image`, see below), `ds.image_bytes(stem)`, iteration yields
 `(stem, annotation)`. Use as a context manager or call `ds.close()`. Datasets are picklable (each
 DataLoader worker re-opens its own file handle).
@@ -310,14 +311,41 @@ All user-facing problems raise `fx.FelixError`.
 felix run SCRIPT [args...]            run a pipeline script
 felix pack FOLDER [-o OUT.felix]      folder -> single compressed .felix
 felix unpack FILE.felix [-o FOLDER]   .felix -> folder
-felix info PATH                       summary + per-class box counts (folder or .felix)
+felix info PATH                       summary + per-class box counts (or images per class and split for class folders)
 felix partition SRC (--parts N | ...)  split a dataset into several smaller datasets
 felix split SRC 0.5 [-o OUT]          a smaller copy (here half) for quick experiments; SRC is unchanged
+                                      (classification: every class keeps its share in every split)
 felix convert coco SRC -o OUT         Roboflow/COCO -> Felix
+felix library [SEARCH]                browse every function and command; type to search
 felix --version
 ```
 
 All writing commands refuse to overwrite existing output unless `--overwrite` is given.
+
+
+### Browsing the library: `felix library`
+
+```
+felix library                 # every function and command, grouped; ↑↓ to move
+felix library split           # start with a search
+```
+
+A full-screen browser in the same look as the rest of the CLI. On the left, everything you can use, grouped,
+with its arguments under each name; type anywhere to search (every word must match; name matches come first). On
+the right, the whole entry: what it does, the toddler-words explanation, why you'd use it, examples, the catch,
+and the exact signature from the code.
+
+| Key | Does |
+|---|---|
+| ↑ ↓ | move through the list (or scroll the entry, after Tab) |
+| Tab / → / Enter | read the entry: ↑ ↓ then scroll it; Shift+Tab / ← goes back |
+| PgUp / PgDn | scroll the entry |
+| Home / End | first / last entry |
+| typing, Backspace | search |
+| Esc | back to the list, then clear the search, then quit (Ctrl+C quits at once) |
+
+It needs a terminal (not a notebook or a pipe). The content is the same as the docs, shipped inside the package,
+so it works offline and always matches the installed version.
 
 ### Partitioning a dataset
 
@@ -407,6 +435,33 @@ dataset/
 ├── annotations/IMG1.yml ...
 └── metadata.yml
 ```
+
+### Class folders (classification)
+
+An ImageNet-style folder is a dataset as it is: one folder per class with its images, optionally inside `train/`,
+`val/` and `test/` (also `valid`, `validation`, `training`, `testing`).
+
+```
+animals/                      animals/
+├── cat/001.jpg …             ├── train/cat/… dog/…
+├── dog/…                     ├── val/cat/… dog/…
+└── bird/…                    └── test/cat/… dog/…
+```
+
+`fx.load("animals/")` reads it without writing anything next to the images: the class names are the folder names (in
+natural order, ids follow), each image is one pair, and its annotation is made up on the fly:
+
+```yaml
+image: cat/001.jpg
+split: train
+class: cat
+class_id: 1
+```
+
+with `metadata.yml` holding `task: classification`, the classes and the split counts. Without split folders every class
+is split 80 / 10 / 10 on its own (stratified, seed 0, the same every time). PNG, JPEG, BMP, WebP, GIF and TIFF are
+read; hidden files and folders (`.` or `_` first) are skipped. `felix pack` turns it into a regular `.felix` file with
+those annotations, and `felix info`, `split` and `partition` work on both.
 
 ### `.felix`
 

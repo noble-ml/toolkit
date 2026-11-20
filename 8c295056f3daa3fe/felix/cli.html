@@ -21,12 +21,20 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 <pre><code>felix run SCRIPT [args...]            run a pipeline script
 felix pack FOLDER [-o OUT.felix]      folder -&gt; single compressed .felix
 felix unpack FILE.felix [-o FOLDER]   .felix -&gt; folder
-felix info PATH                       summary + per-class box counts (folder or .felix)
+felix info PATH                       summary + per-class box counts (or images per class and split for class folders)
 felix partition SRC (--parts N | ...)  split a dataset into several smaller datasets
 felix split SRC 0.5 [-o OUT]          a smaller copy (here half) for quick experiments; SRC is unchanged
+                                      (classification: every class keeps its share in every split)
 felix convert coco SRC -o OUT         Roboflow/COCO -&gt; Felix
+felix library [SEARCH]                browse every function and command; type to search
 felix --version</code></pre>
 <p>All writing commands refuse to overwrite existing output unless <code>--overwrite</code> is given.</p>
+<h2 id="browsing-the-library-felix-library">Browsing the library: <code>felix library</code></h2>
+<pre><code>felix library                 # every function and command, grouped; ↑↓ to move
+felix library split           # start with a search</code></pre>
+<p>A full-screen browser in the same look as the rest of the CLI. On the left, everything you can use, grouped, with its arguments under each name; type anywhere to search (every word must match; name matches come first). On the right, the whole entry: what it does, the toddler-words explanation, why you'd use it, examples, the catch, and the exact signature from the code.</p>
+<table><thead><tr><th>Key</th><th>Does</th></tr></thead><tbody><tr><td>↑ ↓</td><td>move through the list (or scroll the entry, after Tab)</td></tr><tr><td>Tab / → / Enter</td><td>read the entry: ↑ ↓ then scroll it; Shift+Tab / ← goes back</td></tr><tr><td>PgUp / PgDn</td><td>scroll the entry</td></tr><tr><td>Home / End</td><td>first / last entry</td></tr><tr><td>typing, Backspace</td><td>search</td></tr><tr><td>Esc</td><td>back to the list, then clear the search, then quit (Ctrl+C quits at once)</td></tr></tbody></table>
+<p>It needs a terminal (not a notebook or a pipe). The content is the same as the docs, shipped inside the package, so it works offline and always matches the installed version.</p>
 <h2 id="partitioning-a-dataset">Partitioning a dataset</h2>
 <p><code>felix partition</code> splits one dataset into several smaller ones. Every piece is a complete dataset (images, annotations, <code>metadata.yml</code>), so it can be loaded, packed, inspected or partitioned again on its own.</p>
 <pre><code>felix partition data.felix --parts 4                     # 4 equal pieces: part1 … part4

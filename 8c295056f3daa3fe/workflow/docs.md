@@ -14,6 +14,7 @@
 - [Composition](#composition)
 - [Model](#model)
 - [Detection and inference](#detection-and-inference)
+- [Classification](#classification)
 - [Training](#training)
 - [Evaluation](#evaluation)
 - [Quantisation and export](#quantisation-and-export)
@@ -24,7 +25,7 @@
 
 ---
 
-Noble Engineering's CNN framework for bounding-box detection, on its **own compute engine**: a native C core
+Noble Engineering's CNN framework for bounding-box detection and image classification, on its **own compute engine**: a native C core
 for the CPU, its own CUDA kernels for NVIDIA GPUs, and an experimental Apple-GPU backend. No PyTorch.
 
 ```python
@@ -71,7 +72,9 @@ fit, the error says **what** happened, **why**, and **how to fix it**, naming th
 - **Layers**: `Conv2D`, `DepthwiseConv2D`, `PointwiseConv2D`, `SeparableConv2D`, `TransposeConv2D`, `DilatedConv2D`,
   `BatchNorm2D`, `ReLU`, `LeakyReLU`, `SiLU`, `Sigmoid`, `MaxPool2D`, `AvgPool2D`, `Upsample`.
 - **Blocks**: `Bottleneck`, `CSP`, `SPP`, `SPPF`, `SE`, `CBAM`, `Focus`.
-- **Composition**: `wf.input`, `wf.stack`, `wf.Residual`, `wf.parallel`, `wf.feature`, `wf.concat`, `wf.add`, `wf.FPN`, `wf.PAN`, `wf.head`.
+- **Composition**: `wf.input`, `wf.stack`, `wf.Residual` (automatic shortcut projection), `wf.parallel`, `wf.feature`, `wf.concat`, `wf.add`, `wf.FPN`, `wf.PAN`, `wf.head`.
+- **Two tasks**: detection (`wf.head(classes=N)`, boxes) and classification (`wf.head(classes=N, type="cls")`, one label per
+  picture, trained on ImageNet-style class folders).
 - **Training**: one call with sensible defaults (AdamW, warm-up + cosine, GIoU + BCE loss, EMA, early stopping,
   `.nbm` checkpoints, crash protection: safe Ctrl+C / kill, autosave mid-epoch, exact resume; automatic low-memory
   mode on small machines).
@@ -81,7 +84,8 @@ fit, the error says **what** happened, **why**, and **how to fix it**, naming th
 - **Inference**: `wf.inference(source, model, output)` on an image, video, folder or Felix dataset (one random test
   image by default, `all=True` for all; `"webcam"` for live detection), saving originals, annotated copies and `predictions.json`.
 - **Devices**: `"cpu"`, `"cuda"`, `"gpu"`, `"mps"` (experimental), `"auto"`.
-- **CLI**: `workflow init | info | predict | eval | quantize | export | script | devices`. `workflow init` writes a
+- **CLI**: `workflow init | library | info | predict | eval | quantize | export | script | devices`; `workflow library`
+  browses every layer, block and tool. `workflow init` writes a
   ready-to-run starter notebook.
 
 ---
@@ -399,6 +403,25 @@ felix partition shapes.felix --size 100
 
 **Watch out:** choose exactly one of `parts`, `ratio`, `size` or `by_split`.
 
+#### `fx.split` / `felix split`
+
+**Toddler words:** photocopy the pile, then keep only part of the copy. The big pile stays exactly as it was.
+
+**Why you'd use it:** micro experiments. Trying an idea on half (or a tenth) of VOC is much faster, and you still have
+the whole dataset for the real run. Each train / val / test pile keeps the same share, and every picture stays in the
+pile it was in, so test pictures never sneak into training.
+
+```python
+fx.split("voc.felix", 0.5, output=None, size=None, seed=0, overwrite=False)     # → voc_split_50.felix
+fx.split("voc.felix", size=1000, seed=0)                                        # → exactly 1000 pairs
+```
+```
+felix split voc.felix 0.5
+felix split voc.felix 0.1 --seed 2        # another random tenth
+```
+
+**Watch out:** the fraction is a share, not a percent: `0.5` keeps half; `50` is refused with a hint.
+
 #### Other Felix commands
 
 **Toddler words:** look inside a box, zip it up, unzip it, and turn someone else's box into yours.
@@ -709,14 +732,23 @@ wf.Residual(
     wf.Conv2D(64, kernel_size=3, stride=1, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
-    shortcut=None,                                    # same shape in and out: add the input as it is
+    shortcut="auto",                                  # default: same shape in and out → add the input as it is
 )
 
 wf.Residual(
     wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
-    shortcut=wf.Conv2D(128, kernel_size=1, stride=2, padding="valid"),   # shape changes → project the input to match
+    shortcut="auto",                                  # shape changes → a 1×1 Conv2D + BatchNorm2D is added to match
+)
+
+wf.Residual(
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    shortcut=wf.stack(                                # or design the shortcut yourself
+        wf.AvgPool2D(2, stride=2),
+        wf.Conv2D(128, kernel_size=1),
+    ),
 )
 ```
 
@@ -786,14 +818,20 @@ wf.PAN(channels=64)                        # works on the pyramid FPN just produ
 
 #### `wf.head`
 
-**Toddler words:** the mouth. For every spot it says "there's a cat here, this big, and I'm this sure".
+**Toddler words:** the mouth. A box head (`type="bbox"`) says, for every spot, "there's a cat here, this big, and I'm
+this sure". A class head (`type="cls"`) looks at the whole picture and says one word: "cat".
 
-**Why you'd use it:** it's what turns features into boxes. It must be the last layer, and `classes` must match your
-dataset (Workflow checks).
+**Why you'd use it:** it's what turns features into answers. It must be the last layer, and `classes` must match your
+dataset (Workflow checks). Box heads learn from datasets with boxes; class heads learn from folders of pictures, one
+folder per class (see the Classification page).
 
 ```python
-wf.head(classes=3, channels=None)          # channels=None: as wide as each incoming map
+wf.head(classes=3, channels=None, type="bbox")    # detection; channels=None: as wide as each incoming map
+wf.head(classes=10, channels=512, type="cls")     # classification; channels=512: widen to 512 before pooling
 ```
+
+**Watch out:** a class head trained on a box dataset (or the other way round) stops with a message naming the right
+`type`.
 
 ---
 
@@ -854,10 +892,6 @@ model.train(data.train, validation=data.val, epochs=50, batch_size=16, lr=1e-3, 
 **Not enough memory?** On CPU it checks first. If the batch won't fit it turns on `low_memory` (it forgets the
 in-between results and works them out again when it needs them: same answers, a bit slower), and if even that won't
 fit it tells you the biggest `batch_size` that does, before wasting any time.
-
-While it learns you see a bar, plus a table that gains a line every epoch: the training loss, the validation loss
-(how wrong it is on pictures it doesn't learn from) and the mAP scores. If the training loss keeps falling but the
-validation loss rises, the brain is memorising instead of learning.
 
 While it learns you see a bar, plus a table that gains a line every epoch: the training loss, the validation loss
 (how wrong it is on pictures it doesn't learn from) and the mAP scores. If the training loss keeps falling but the
@@ -1110,7 +1144,7 @@ Everything you can put in a model, one line each. Write every layer/block on its
 Blocks build their own layers inside: you only pick their arguments, you don't put layers in between.
 Only `wf.stack`, `wf.Residual` and `wf.parallel` take layers you write yourself.
 
-Workflow 0.4.1. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
+Workflow 0.5.0. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
 
 ### Start
 
@@ -1158,21 +1192,21 @@ Input channels are always worked out from the line above. `padding="same"` keeps
 
 | Tool | What it does | You choose | Example |
 |---|---|---|---|
-| `wf.Residual` | nothing of its own: wraps the layers you write inside it with a skip connection (output = layers(x) + x) | the layers, plus an optional `shortcut=` (a layer or list) when the shape changes | see [wf.Residual below](#residual) |
+| `wf.Residual` | nothing of its own: wraps the layers you write inside it with a skip connection (output = layers(x) + x) | the layers, plus `shortcut=` (`"auto"` by default: projects by itself when the shape changes) | see [wf.Residual below](#residual) |
 | `wf.parallel` | sends the same input down every branch and merges the results | the branches (2+), `merge="concat"` or `"add"` | see [wf.parallel below](#parallel) |
 | `wf.feature` | names the current tensor so later lines can reach back to it; passes it on unchanged | a name, or a tuple of names after FPN/PAN | `wf.feature("p3")` |
 | `wf.concat` | joins named features along channels (same height and width) | the feature names | `wf.concat("p3", "up")` |
 | `wf.add` | sums named features (identical shapes) | the feature names | `wf.add("p3", "up")` |
 | `wf.FPN` | top-down pyramid: 1×1 Conv-BN-SiLU per map, each coarser map resized and added into the next finer one, then a 3×3 Conv-BN-SiLU per level | the feature names, `channels=None` (smallest input) | `wf.FPN("p3", "p4", "p5", channels=64)` |
 | `wf.PAN` | bottom-up pass over the pyramid: stride-2 3×3 Conv-BN-SiLU down, add, 3×3 Conv-BN-SiLU refine | `channels=None`, optional feature names | `wf.PAN(channels=64)` |
-| `wf.head` | detection head; per map two 3×3 Conv-BN-SiLU and a 1×1 conv giving box, confidence and class scores; must be the last line | `classes=80`, `channels=None` | `wf.head(classes=20)` |
+| `wf.head` | the last line. `type="bbox"` (detection): per map two 3×3 Conv-BN-SiLU and a 1×1 conv giving box, confidence and class scores. `type="cls"` (classification): optional 1×1 Conv-BN-SiLU to `channels`, global average pool, one logit per class | `classes=80`, `channels=None`, `type="bbox"` or `"cls"` | `wf.head(classes=20)` · `wf.head(classes=10, type="cls")` |
 
 ### Tools
 
 | Tool | What it does | You choose | Example |
 |---|---|---|---|
 | `model.summary()` | prints every layer with its output shape, parameters and MACs (multiply-adds) | `input=` (another picture size), `show=True` | `model.summary()` |
-| `model.train(...)` | trains on a Felix split; live bar and per-epoch table; saves `last.nbm` / `best.nbm` | `train`, `validation=`, `epochs=100`, `batch_size=16`, `lr=1e-3`, `device=`, `img_size=`, `optimizer="adamw"`, `patience=30`, `save_every=5`, `output="runs/train"`, `quantization=`, `augment=True`, `ema=True` | `model.train(data.train, validation=data.val, epochs=50, batch_size=16, device="mps")` |
+| `model.train(...)` | trains on a Felix split; live bar and per-epoch table; saves `last.nbm` / `best.nbm` | `train`, `validation=`, `epochs=100`, `batch_size=16`, `lr=1e-3`, `device=`, `img_size=`, `optimizer="adamw"`, `patience=30`, `save_every=5`, `output="runs/train"`, `quantization=`, `augment=True`, `ema=True`, `low_memory=None` (recompute to save memory; auto on CPU), `autosave=10` (minutes) | `model.train(data.train, validation=data.val, epochs=50, batch_size=16, device="mps")` |
 | `wf.eval(model)` | size, FLOPs, latency, FPS, memory; with `dataset=` also mAP, precision, recall | `dataset=None`, `device=`, `img_size=`, `batch_size=8`, `confidence=0.001`, `iou=0.6` | `wf.eval(model, dataset=data.test)` |
 | `model.save(path)` / `wf.load(path)` | saves / loads a `.nbm` (weights, training state, class names) | the path | `model.save("detector.nbm")` |
 | `wf.inference(source, model, output)` | runs the model on an image, video, folder, Felix dataset or `"webcam"` (live window; ← → / 0–9 switch camera, q quits); saves `original/`, `annotated/`, `predictions.json` | `all=False` (one random image from a dataset/folder), `split=`, `confidence=0.25`, `iou=0.45`, `img_size=`, `device=`, `batch_size=16`, `record=False`, `mirror=False` (webcam) | `wf.inference("photo.jpg", model, "results/")` |
@@ -1248,14 +1282,26 @@ wf.Residual(
 ),
 ```
 
-If the layers change the shape, give the shortcut a projection:
+If the layers change the shape, the default `shortcut="auto"` adds the matching 1×1 Conv2D + BatchNorm2D:
 
 ```python
 wf.Residual(
     wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
     wf.BatchNorm2D(),
     wf.SiLU(),
-    shortcut=wf.Conv2D(128, kernel_size=1, stride=2),
+),
+```
+
+Or choose the shortcut yourself: `"identity"` (always the input), `False` (none), a layer, or a whole stack:
+
+```python
+wf.Residual(
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),
+    wf.BatchNorm2D(),
+    shortcut=wf.stack(
+        wf.AvgPool2D(2, stride=2),
+        wf.Conv2D(128, kernel_size=1),
+    ),
 ),
 ```
 
@@ -1504,14 +1550,14 @@ shortcut is matched automatically, so the two paths always have the same shape.
 | Function | Meaning |
 |---|---|
 | `wf.stack(wf.input(*None), *layers)` | layers in order. The outermost stack is the model; `input` is `(C, H, W)`, default `(3, 640, 640)` |
-| `wf.Residual(*layers, shortcut=None)` | `layers(x) + x`. With `shortcut=` (a layer or list) the input is projected first. Both paths must end with the same shape |
+| `wf.Residual(*layers, shortcut="auto")` | `layers(x) + shortcut(x)`. `"auto"`: the input itself when the shape is kept, else a 1×1 Conv2D + BatchNorm2D that matches it. `"identity"`: always the input (error if shapes differ). A layer or `wf.stack(...)`: your own shortcut. `False`: no shortcut |
 | `wf.parallel(*branches, merge="concat")` | every branch receives the same input; results are concatenated along channels or summed (`merge="add"`) |
 | `wf.feature("name")` | registers the current tensor under a name and passes it on unchanged. After a pyramid, give one name per map: `wf.feature(("n3", "n4", "n5"))` |
 | `wf.concat("a", "b", ...)` | concatenates named features along channels (same height and width) |
 | `wf.add("a", "b", ...)` | sums named features (identical shapes) |
 | `wf.FPN("p3", "p4", "p5", channels=None)` | top-down pyramid over named features (any order, any channel counts); returns the pyramid, largest map first |
 | `wf.PAN(*names, channels=None)` | bottom-up aggregation over the incoming pyramid (or named features) |
-| `wf.head(classes=80, channels=None)` | detection head over the pyramid (or a single map); must be the last layer |
+| `wf.head(classes=80, channels=None, type="bbox")` | the last layer. `type="bbox"`: detection head over the pyramid (or a single map). `type="cls"`: classification head, one label per image (see [Classification](#classification)) |
 
 ### Features
 
@@ -1556,14 +1602,25 @@ to name them). A single-tensor layer after a pyramid raises an error that says s
 
 ### Residual shapes
 
-`wf.Residual` checks that its layers keep the input's shape. If they don't, the error shows both shapes and
-the projection to add:
+With the default `shortcut="auto"`, a `wf.Residual` whose layers change the shape gets a projection by itself: a
+1×1 `Conv2D` with the stride and channels that match, followed by `BatchNorm2D` (the standard ResNet shortcut).
+When the layers keep the shape, the input is added directly and nothing is added to the model.
+
+| `shortcut=` | What carries the input |
+|---|---|
+| `"auto"` (default) | the input, or a 1×1 Conv2D + BatchNorm2D when channels or size change |
+| `"identity"` | always the input; an error if the shapes differ |
+| `wf.Conv2D(...)` | your own projection |
+| `wf.stack(...)` | your own shortcut network (e.g. `wf.AvgPool2D(2, stride=2)` then `wf.Conv2D(128, 1)`) |
+| `False` | nothing: the block is just its layers |
+
+Auto cannot grow the picture or trim the border that `padding="valid"` removes; then it says so:
 
 ```
-layer 2 (Residual): Residual cannot add its two paths.
-  why: the layers output (16, 15, 15) but the shortcut carries (8, 30, 30); addition needs identical shapes.
-  fix: keep the shape inside the block (same channels, stride 1, padding='same'), or project the input with
-       shortcut=wf.Conv2D(16, kernel_size=1, stride=2).
+layer 2 (Residual): Residual cannot match its shortcut automatically.
+  why: the layers turn (8, 6, 6) into (8, 4, 4); a 1×1 convolution can change channels and shrink by a stride,
+       but not grow the picture or trim the border that padding='valid' removes.
+  fix: use padding='same' inside the block, or give your own shortcut=wf.stack(...).
 ```
 
 ---
@@ -1616,7 +1673,8 @@ read: the error says so.
 
 ### The head
 
-`wf.head(classes=80)` ends a detection model. It works on the pyramid coming from `wf.FPN` / `wf.PAN` (or on a
+`wf.head(classes=80)` (`type="bbox"`, the default) ends a detection model; for one label per picture see
+[Classification](#classification). It works on the pyramid coming from `wf.FPN` / `wf.PAN` (or on a
 single map). Per map it applies two 3×3 Conv-BN-SiLU layers and a 1×1 convolution with `4 + 1 + classes`
 output channels:
 
@@ -1780,6 +1838,154 @@ A list input returns `Predictions` (a list of `Results` with `.show()` and `.to_
 
 Unreadable inputs raise a `DataError` naming the file: missing files, unsupported extensions, damaged images.
 OpenCV frames are BGR; convert with `cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)` (the generated scripts do).
+
+---
+
+## Classification
+
+A classification model gives one label per picture ("cat"), instead of boxes. It is the same `wf.stack` you already
+write, ending in `wf.head(..., type="cls")`, trained on a folder of class folders.
+
+### The data: class folders
+
+The usual ImageNet layout, one folder per class with its pictures inside. `fx.load` reads it as it is: nothing is
+copied or written next to the images.
+
+```
+animals/                      animals/
+├── cat/                      ├── train/
+│   ├── 001.jpg               │   ├── cat/ …
+│   └── …                     │   └── dog/ …
+├── dog/                      ├── val/
+└── bird/                     │   ├── cat/ …
+                              │   └── dog/ …
+                              └── test/ …
+```
+
+- **Class folders only** (left): every class is split 80 / 10 / 10 into train / val / test *on its own*, so each split
+  has every class in the same proportion. The split is fixed (seed 0): the same folder always gives the same splits.
+- **train/ val/ test/ folders** (right; `valid`, `validation`, `training`, `testing` work too): those splits are used.
+- Class names are the folder names, in natural order (`class2` before `class10`); class ids follow that order.
+- Images can be PNG, JPEG, BMP, WebP, GIF or TIFF, any size, nested any depth inside a class folder. Hidden files and
+  folders (starting with `.` or `_`) are skipped.
+
+```python
+import felix as fx
+
+data = fx.load("animals/")
+data.task        # "classification"
+data.classes     # ['bird', 'cat', 'dog']
+data.splits      # {'train': 2400, 'val': 300, 'test': 300}
+```
+
+Everything else in Felix works on it: `felix info animals/` (images per class and split), `felix pack animals/ -o
+animals.felix` (one file), `felix split animals/ 0.1` (a tenth, keeping every class's share in every split),
+`felix partition`.
+
+### The head
+
+```python
+wf.head(classes=3, channels=None, type="cls")
+```
+
+| Argument | Meaning |
+|---|---|
+| `classes` | how many classes (must match the dataset; training checks) |
+| `channels` | `None`: pool the last feature map as it is. A number: first widen it with a 1×1 Conv-BN-SiLU to that many channels (e.g. 1024 or 1280, as large classifiers do) |
+| `type` | `"cls"` (or `"classify"`) for classification; `"bbox"` (the default) for detection |
+
+Inside: (optional 1×1 Conv-BN-SiLU) → global average pooling → a fully connected layer (a 1×1 convolution) with one
+logit per class. The output is `(classes, 1, 1)`. After a pyramid (FPN / PAN) it uses the last, deepest map. The class
+biases start at zero, so every class starts equally likely.
+
+### A model
+
+```python
+import felix as fx
+import workflow as wf
+
+data = fx.load("animals/")
+
+model = wf.stack(
+    wf.input(channels=3, height=224, width=224),
+
+    wf.Conv2D(32, kernel_size=3, stride=2, padding="same"),     # 224 → 112
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+
+    wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),     # 112 → 56
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(out_channels=64, n=1),
+
+    wf.Conv2D(128, kernel_size=3, stride=2, padding="same"),    # 56 → 28
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(out_channels=128, n=2),
+
+    wf.Conv2D(256, kernel_size=3, stride=2, padding="same"),    # 28 → 14
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.CSP(out_channels=256, n=2),
+
+    wf.head(classes=len(data.classes), channels=512, type="cls"),
+)
+
+model.train(data, epochs=50, batch_size=32)
+```
+
+ResNet-style networks are a few lines too: `wf.Residual(...)` with the default `shortcut="auto"` adds the 1×1
+projection wherever a block changes channels or size.
+
+### Training
+
+`model.train` is the same call as for detection; with a classification head it:
+
+- uses softmax cross-entropy with label smoothing 0.1 (the target is 90% the right class, 10% spread over all);
+- augments with a random crop (25–100% of the area, aspect 3:4 to 4:3), a horizontal flip and brightness / contrast
+  jitter; validation and testing use the whole picture;
+- reports the training loss, the validation loss and **top-1 / top-5 accuracy** each epoch, and keeps `best.nbm` by
+  0.9 · top-1 + 0.1 · top-5;
+- keeps everything else: AdamW, warm-up + cosine schedule, EMA weights, early stopping, autosave, exact resume,
+  `low_memory`, every device.
+
+```
+epoch   train loss   val loss   top-1   top-5
+    1        1.055      0.931   0.470   1.000
+    2        0.771      0.702   0.830   1.000  ← best
+```
+
+A classification model refuses a dataset with boxes (and a detector refuses class folders), saying which head to use.
+
+### Evaluation
+
+```python
+result = wf.eval(model, dataset=data.test)
+result.top1, result.top5      # accuracy
+result.per_class              # [{"class": "cat", "images": 300, "accuracy": 0.93}, ...]
+result.confusion_matrix       # rows: true class, columns: predicted class
+```
+
+`show()` prints the size / speed table, top-1, top-5, the cross-entropy and the accuracy of every class.
+
+### Predicting
+
+```python
+r = model.predict("photo.jpg")
+r.class_name, r.confidence    # "cat", 0.93
+r.top                         # the five best: [{"class": "cat", "class_id": 1, "confidence": 0.93}, ...]
+r.probabilities               # one per class, summing to 1
+r.save("labelled.png")        # the picture with its label (and the runners-up) in the top-left corner
+```
+
+`wf.inference(source, model, output)` and `workflow predict` work as for detection, on images, folders, videos,
+datasets and the webcam: annotated pictures get the label tag, and `predictions.json` holds `class`, `class_id`,
+`confidence` and `top` for each image.
+
+### Export
+
+`model.export("onnx")` writes the logits (`(N, classes, 1, 1)`); apply a softmax to get probabilities. The `.nbm` file
+records the task (`"classify"`), so `wf.load` gives back a classifier.
 
 ---
 
@@ -2039,8 +2245,8 @@ Workflow computes with its own engine. PyTorch is not used.
 
 | Device | Backend | Status |
 |---|---|---|
-| `"cpu"` | **native C core**: im2col + cache-blocked GEMM, depthwise kernels, a thread pool, fused BatchNorm / activation kernels | stable |
-| `"cuda"`, `"cuda:N"` | **Workflow's own CUDA kernels** (register-tiled GEMM convolution, BatchNorm, pooling, ...), shipped as PTX and run through the NVIDIA driver | stable |
+| `"cpu"` | **native C core**: packed, register-blocked GEMM convolution (AVX / AVX2+FMA / NEON, no im2col copy), depthwise kernels, a thread pool, fused BatchNorm / activation kernels | stable |
+| `"cuda"`, `"cuda:N"` | **Workflow's own CUDA kernels** (implicit-GEMM convolution, parallel BatchNorm reductions, fused BatchNorm + activation, pooling, ...), shipped as PTX and run through the NVIDIA driver | stable |
 | `"gpu"` | CUDA if present, else the Apple GPU | |
 | `"mps"` | Apple GPU through **MLX**, Apple's open-source Metal array library (`pip install mlx`) | experimental: warns when used |
 | `"auto"` | CUDA, then CPU (experimental MPS is never picked implicitly) | |
@@ -2061,6 +2267,44 @@ what to do. Workflow never silently runs on another device than the one you aske
   gradient goes straight to the winning pixel).
 - BatchNorm followed by an activation (`BatchNorm2D()` then `SiLU()`, `ReLU()`, ...) runs as one fused operation.
 - The next batch of pictures is decoded on the CPU while the GPU trains on the current one.
+
+### How the CUDA backend is fast
+
+- Convolutions are **implicit GEMMs**: one kernel reads the image straight from memory through a small per-shape
+  table (no 9× im2col copy) and writes the result directly in NCHW (no transposes). 128 × 128 tiles, each thread
+  holding an 8 × 8 block in registers, double-buffered shared memory read as conflict-free vectors.
+- The input gradient of a stride-1 convolution is the same kernel with the flipped, transposed weights; the weight
+  gradient splits its long sum over the batch into segments that run in parallel and are added in a fixed order.
+- BatchNorm statistics are parallel reductions (fp32 within a thread, double across threads), and BatchNorm followed by
+  an activation runs fused, recomputing instead of storing.
+- Workflow shares the GPU's primary context with the CUDA runtime, so it runs in the same process as PyTorch, CuPy or
+  other CUDA libraries.
+
+### Speed against PyTorch
+
+The same network (traced from Workflow and replayed op by op in PyTorch with the same weights), the same input,
+fp32, AdamW, one training step = forward + backward + optimizer step. Ratios above 1 mean Workflow is faster.
+`benchmarks/vs_pytorch.py` reproduces them; before timing it checks both against a float64 run (Workflow is as
+close to exact as PyTorch or closer).
+
+| Machine | Model | Train | Inference |
+|---|---|---|---|
+| Intel i5-3210M (2012 laptop, 2 cores), CPU | detector 320 px, batch 16 | **1.46×** | **1.74×** |
+| | detector 640 px, batch 8 | **1.51×** | **1.65×** |
+| | ResNet-18 224 px, batch 16 | **1.16×** | **1.08×** |
+| Intel i7-7700HQ, CPU | detector 320 px, batch 16 | **1.22×** | **1.22×** |
+| | ResNet-18 224 px, batch 16 | 0.95× | 0.99× |
+| Apple M-series, CPU | detector 320 px, batch 16 | **2.05×** | **3.83×** |
+| | ResNet-18 224 px, batch 16 | **1.22×** | **1.71×** |
+| Apple M-series GPU (`mps`) | detector 320 px, batch 16 | **1.25×** | **1.47×** |
+| | ResNet-18 224 px, batch 32 | 0.98× | **1.25×** |
+| GTX 1050 (`cuda`) | detector 320 px, batch 4 | 0.53× | 0.60× |
+| | ResNet-18 224 px, batch 4 | 0.57× | 0.45× |
+
+On NVIDIA GPUs PyTorch is still faster. Part of that is cuDNN's Winograd convolutions for 3 × 3 kernels: they do
+fewer multiplications, at slightly lower precision (on the GTX 1050 they reach 3.0–3.4 "TFLOPS" on a card whose fp32
+peak is 1.9). Workflow keeps every convolution an exact fp32 sum; its kernels run at 40–55% of that peak. Version 0.5
+made CUDA training 2.3× faster than 0.4 (detector 320 px, batch 4: 34.5 → 80.7 images/s).
 
 ### Correctness
 
@@ -2114,10 +2358,36 @@ workflow quantize MODEL.nbm int8|fp16|fp32 [--calibration D] [-o OUT]   post-tra
 workflow export MODEL.nbm --format onnx|nbm [--precision ...] [-o OUT]
 workflow script MODEL.nbm --preset image|folder|video|webcam    write an inference script
 workflow devices                               cpu / cuda / mps, and why something is unavailable
+workflow library [SEARCH]                     browse every layer, block and tool; type to search
 ```
 
 `quantize` writes `MODEL-<type>.nbm` by default and prints the size before and after. Commands never overwrite
 existing files without `--overwrite`. Errors print the what / why / fix explanation and exit with status 1.
+
+
+### Browsing the library: `workflow library`
+
+```
+workflow library                 # every layer, block and tool, grouped; ↑↓ to move
+workflow library residual        # start with a search
+```
+
+A full-screen browser in the same look as the rest of the CLI. On the left, everything you can use, grouped,
+with its arguments under each name; type anywhere to search (every word must match; name matches come first). On
+the right, the whole entry: what it does, the toddler-words explanation, why you'd use it, examples, the catch,
+and the exact signature from the code.
+
+| Key | Does |
+|---|---|
+| ↑ ↓ | move through the list (or scroll the entry, after Tab) |
+| Tab / → / Enter | read the entry: ↑ ↓ then scroll it; Shift+Tab / ← goes back |
+| PgUp / PgDn | scroll the entry |
+| Home / End | first / last entry |
+| typing, Backspace | search |
+| Esc | back to the list, then clear the search, then quit (Ctrl+C quits at once) |
+
+It needs a terminal (not a notebook or a pipe). The content is the same as the docs, shipped inside the package,
+so it works offline and always matches the installed version.
 
 ### predict
 
@@ -2184,6 +2454,30 @@ All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webc
 ---
 
 ## Changes
+
+### 0.5.0
+
+- **Classification**: `wf.head(classes=N, type="cls")` gives one label per picture (optional 1×1 widening to
+  `channels`, global average pooling, a fully connected layer). `model.train` then uses softmax cross-entropy with label
+  smoothing, random-crop augmentation and reports top-1 / top-5 accuracy; `wf.eval` gives accuracy per class and a
+  confusion matrix; `model.predict` returns a `ClassResult` (`class_name`, `confidence`, `top`, `probabilities`);
+  `wf.inference`, `workflow predict`, the webcam and ONNX export all work with it. See [Classification](#classification).
+- Training data for it: ImageNet-style class folders, read directly by Felix 0.6 (`fx.load("animals/")`).
+- **CUDA 2–2.3× faster**: implicit-GEMM convolutions (no im2col copies, no layout transposes, conflict-free
+  vectorised tiles), parallel BatchNorm reductions and fused BatchNorm + activation. Same fp32 results (all operations
+  match the CPU core to 4.5e-7).
+- CUDA uses the GPU's primary context, so Workflow and PyTorch (or any CUDA library) can share one process.
+- `benchmarks/`: `vs_pytorch.py` (the same network traced and replayed in PyTorch, checked against float64, then
+  timed), `profile_backend.py`, `device_check.py`, `conv_check.py`, `conv_speed.py`.
+
+### 0.4.2
+
+- **`workflow library`**: a full-screen browser of every layer, block and tool, in the CLI's look. Left: everything,
+  grouped, with the arguments under each name; type to search. Right: the full entry (what it does, the toddler-words
+  explanation, why, examples, the catch, the exact signature). `felix library` does the same for Felix.
+- `wf.Residual(..., shortcut="auto")` is the new default: when the layers change channels or size, the shortcut
+  becomes a matching 1×1 Conv2D + BatchNorm2D by itself. Also `shortcut="identity"`, `shortcut=False` (no
+  shortcut), or any layer / `wf.stack(...)` as your own shortcut. Models saved before load unchanged.
 
 ### 0.4.1
 
