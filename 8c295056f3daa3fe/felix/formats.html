@@ -16,13 +16,15 @@ table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflo
 th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
-</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html" class="on">Formats</a></nav><h1 id="dataset-formats">Dataset formats</h1>
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="cookbook.html">Cookbook</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html" class="on">Formats</a></nav><h1 id="dataset-formats">Dataset formats</h1>
 <h2 id="folder">Folder</h2>
+<p><strong>Toddler words:</strong> the dataset spread out in a folder: pictures in one drawer, their notes in another.</p>
 <pre><code>dataset/
 ├── images/IMG1.png ...        (JPEG, PNG or WebP, kept as they were)
 ├── annotations/IMG1.yml ...
 └── metadata.yml</code></pre>
 <h2 id="shards-a-folder-of-sh-felix-files">Shards: a folder of <code>.sh_felix</code> files</h2>
+<p><strong>Toddler words:</strong> a huge dataset split into many small boxes, so you only carry one at a time.</p>
 <p>For datasets too big for one file, a folder holds many shards:</p>
 <pre><code>voc_shards/
 ├── voc_shards-00000.sh_felix
@@ -31,6 +33,7 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 <p>Each shard is a complete dataset of its own (a zip like <code>.felix</code>: <code>images/</code>, <code>annotations/</code>, its own <code>metadata.yml</code> with <code>shard: {index, of, dataset}</code>), plus <code>index.tsv</code> (stem, split and class id per line, so a folder of thousands of shards loads without reading every annotation). <code>fx.load("voc_shards/")</code> reads the folder as one dataset; a single shard also loads on its own. Shards open on demand, at most 64 at a time, and reads are thread-safe.</p>
 <p>Make them with <code>felix shard</code> / <code>fx.shard(...)</code> from any dataset, or straight from generation with <code>fx.export("name.sh_felix")</code>. Splits are the same as the unsharded dataset's. <code>felix pack voc_shards/ -o voc.felix</code> puts them back into one file. All shards in a folder must come from the same dataset (same classes, no file in two shards); Felix says which shard breaks that.</p>
 <h2 id="class-folders-classification">Class folders (classification)</h2>
+<p><strong>Toddler words:</strong> one folder per kind of thing: every picture in <code>cat/</code> is a cat.</p>
 <p>An ImageNet-style folder is a dataset as it is: one folder per class with its images, optionally inside <code>train/</code>, <code>val/</code> and <code>test/</code> (also <code>valid</code>, <code>validation</code>, <code>training</code>, <code>testing</code>).</p>
 <pre><code>animals/                      animals/
 ├── cat/001.jpg …             ├── train/cat/… dog/…
@@ -43,8 +46,13 @@ class: cat
 class_id: 1</code></pre>
 <p>with <code>metadata.yml</code> holding <code>task: classification</code>, the classes and the split counts. Without split folders every class is split 80 / 10 / 10 on its own (stratified, seed 0, the same every time). PNG, JPEG, BMP, WebP, GIF and TIFF are read; hidden files and folders (<code>.</code> or <code>_</code> first) are skipped. <code>felix pack</code> turns it into a regular <code>.felix</code> file with those annotations, and <code>felix info</code>, <code>split</code> and <code>partition</code> work on both.</p>
 <h2 id="felix"><code>.felix</code></h2>
+<p><strong>Toddler words:</strong> the whole folder zipped into one file, easy to copy and share.</p>
+<pre><code>felix pack ./leaves -o leaves.felix     # folder → one file
+felix unpack leaves.felix -o ./leaves   # and back
+unzip -l leaves.felix | head            # it's a normal zip</code></pre>
 <p>A single file for the same tree - a standard ZIP archive (PNG/JPEG stored, YAML deflated), so <code>unzip</code> and Python's <code>zipfile</code> can open it. <code>felix pack</code> / <code>felix unpack</code> convert between the two; <code>fx.export("x.felix")</code> writes it directly (via a <code>.part</code> file, so a crash never leaves a half-written dataset).</p>
 <h2 id="annotations-name-yml"><code>annotations/&lt;name&gt;.yml</code></h2>
+<p><strong>Toddler words:</strong> the note next to each picture: what's in it, where the boxes are, and where the picture came from.</p>
 <pre><code>image: leaf_0001.jpg
 width: 640
 height: 640
@@ -67,6 +75,7 @@ source:                          # where the image came from: see Licences and p
 history: [center_crop 640x640, annotated by leaf-detector]</code></pre>
 <p>Classification datasets have <code>class</code> and <code>class_id</code> at the top instead of <code>objects</code>.</p>
 <h2 id="metadata-yml"><code>metadata.yml</code></h2>
+<p><strong>Toddler words:</strong> the label on the outside of the box: what's in the dataset, how many pictures, which classes.</p>
 <pre><code>felix_version: "1.0.0"
 created: "2026-11-21T08:17:58Z"
 title: leaves

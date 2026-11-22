@@ -16,9 +16,10 @@ table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflo
 th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
-</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html" class="on">Getting started</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="getting-started">Getting started</h1>
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html" class="on">Getting started</a><a href="cookbook.html">Cookbook</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="getting-started">Getting started</h1>
 <p>A Felix script is five kinds of lines, run top to bottom: <strong>classes → acquire → transform → annotate → export</strong>. Nothing happens until <code>fx.export</code>: the earlier lines describe the dataset, export builds it.</p>
 <h2 id="1-classes">1. Classes</h2>
+<p><strong>Toddler words:</strong> write the shopping list: the things you want boxes for.</p>
 <pre><code># classes.yml
 classes:
   - name: leaf
@@ -31,22 +32,26 @@ confidence: 0.3                          # minimum model confidence (optional; p
 fx.load_class("./classes.yml")</code></pre>
 <p>Imported boxes and model detections are mapped onto these classes; anything else is left out. Without a class file, every class is kept and models detect everything they know.</p>
 <h2 id="2-acquire">2. Acquire</h2>
+<p><strong>Toddler words:</strong> say where the pictures come from: your folder, a video, free picture libraries.</p>
 <pre><code>fx.acquire([
     fx.sources.local("./raw/leaves"),                       # a folder of photos, as it is
     fx.sources.video("./greenhouse.mp4", sampling=fx.sampling.auto()),
     fx.sources.wikimedia(query="plant leaves", limit=500),
 ])</code></pre>
-<p>Any mix of <a href="sources.html">sources</a>. Local folders need no preparation; existing datasets (COCO, YOLO, Felix) bring their labels and splits along. Online sources download politely (one request at a time per provider, as their rules ask) and keep each image's licence, author and page.</p>
+<p>Any mix of <a href="sources.html">sources</a>. Local folders need no preparation; existing datasets (COCO, YOLO, Felix) bring their labels and splits along. Online sources download many pictures at once, ask each provider's API as politely as its rules say, and keep each image's licence, author and page. Leave out the query to take whatever a source has.</p>
 <h2 id="3-transform">3. Transform</h2>
+<p><strong>Toddler words:</strong> tidy the pictures up: same size, no copies, faces blurred.</p>
 <pre><code>fx.transform.center_crop(size=640)       # or letterbox(size=640), dedupe(), blur_faces(), …</code></pre>
 <p>Steps run in the order written. Boxes and masks move with the pixels.</p>
 <h2 id="4-annotate">4. Annotate</h2>
+<p><strong>Toddler words:</strong> a helper draws the boxes on every picture that has none.</p>
 <pre><code>import workflow as wf
 
 fx.annotate(model=wf.load("./models/leaf-detector.nbm"))   # your own model
 # fx.annotate(model=fx.models.yolo26n)                     # or a built-in one</code></pre>
 <p>Only images without labels are annotated (<code>replace=True</code> to redo all). An image the model fails on is marked failed and left out of the dataset, not saved as "no objects".</p>
 <h2 id="5-export">5. Export</h2>
+<p><strong>Toddler words:</strong> run everything and pack the finished dataset into a box, with a label saying what's inside and who to credit.</p>
 <pre><code>fx.export("./datasets/leaves.felix")                       # until the sources run out
 fx.export("./datasets/leaves.felix", pairs=2000)           # exactly 2,000 image/annotation pairs
 fx.export("./datasets/leaves", license="CC-BY-4.0")        # a folder, released openly

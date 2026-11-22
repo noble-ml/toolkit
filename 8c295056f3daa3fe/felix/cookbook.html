@@ -1,0 +1,462 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>felix · cookbook</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="cookbook.html" class="on">Cookbook</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="felix-cookbook">Felix cookbook</h1>
+<p>Every Felix tool, explained like you're three, then *why* you'd reach for it and where it goes. After the tools come <strong>recipes</strong>: whole datasets, start to finish, that you can copy and change.</p>
+<p>How to read an entry:</p>
+<ul><li><strong>Toddler words</strong>: what it is.</li><li><strong>Why you'd use it</strong>: the reasoning, and where it usually sits.</li><li><strong>Example</strong>: the main arguments shown, with their defaults.</li><li><strong>Watch out</strong>: the one mistake people make (when there is one).</li></ul>
+<p>A Felix program is a list of steps, in order. Nothing downloads or changes until <code>fx.export</code> runs them:</p>
+<pre><code>import felix as fx
+
+fx.load_class("./classes.yml")          # 1. what we are looking for       (optional)
+fx.acquire([...])                       # 2. where the pictures come from
+fx.transform.center_crop(size=640)      # 3. change the pictures            (any number, in order)
+fx.annotate(model=fx.models.yoloe)      # 4. draw the boxes                 (if the pictures have none)
+fx.transform.augment(copies=2)          # 5. more changes, after the boxes  (optional)
+fx.export("./datasets/leaves.felix")    # 6. run it all and write the dataset</code></pre>
+<p>---</p>
+<h2 id="part-1-what-to-look-for">Part 1 · What to look for</h2>
+<h3 id="fx-load-class"><code>fx.load_class</code></h3>
+<p><strong>Toddler words:</strong> the shopping list. Before going out, write down what you're looking for: "leaf", "tomato", "white tiger". Felix only keeps boxes for things on the list.</p>
+<p><strong>Why you'd use it:</strong> it decides the dataset's classes (and their ids, in file order). An open-vocabulary model such as <code>fx.models.yoloe</code> is asked to find exactly these, by name or by <code>prompt</code>. <code>aliases</code> say which names in other datasets or in a model's labels mean the same thing.</p>
+<pre><code>fx.load_class("./classes.yml")</code></pre>
+<pre><code>classes:
+  - leaf                                  # the name is also the prompt
+  - tomato
+  - name: white tiger
+    prompt: a white bengal tiger          # optional: a more precise description for the model
+    aliases: [White tiger, tiger_white]   # optional: other names that mean this class
+    confidence: 0.3                       # optional: this class's own minimum score
+confidence: 0.25                          # optional: the default minimum score</code></pre>
+<p><strong>Watch out:</strong> without a class file, everything is kept: a COCO import brings all 80 classes, and a model labels everything it knows. Good for "collect anything", noisy for a focused detector.</p>
+<p>---</p>
+<h2 id="part-2-where-the-pictures-come-from">Part 2 · Where the pictures come from</h2>
+<h3 id="fx-acquire"><code>fx.acquire</code></h3>
+<p><strong>Toddler words:</strong> the shopping trip. Point at the places pictures come from; Felix goes there when the dataset is built.</p>
+<p><strong>Why you'd use it:</strong> real datasets mix sources: your own photos, a video, a museum, a public dataset. Every picture remembers where it came from, its licence and who to credit. Call <code>fx.acquire</code> again to add more sources.</p>
+<pre><code>fx.acquire([
+    fx.sources.local("./raw/leaves"),
+    fx.sources.wikimedia(query="plant leaves", limit=500),
+], blur_faces=False)</code></pre>
+<p><code>blur_faces=True</code> blurs every face before anything else happens (see <code>blur_faces</code> below).</p>
+<h3 id="fx-sources-local"><code>fx.sources.local</code></h3>
+<p><strong>Toddler words:</strong> the pictures already in your drawer.</p>
+<p><strong>Why you'd use it:</strong> your own photos, a zip someone sent you, or a dataset you downloaded. COCO, YOLO and Felix datasets are recognised by their content and bring their boxes and splits. A folder of class folders (<code>cat/</code>, <code>dog/</code>) becomes a classification dataset.</p>
+<pre><code>fx.sources.local("./raw/leaves", recursive=True, labels=None, license=None)
+fx.sources.local("./downloads/roboflow-export.zip")          # COCO inside: boxes come along
+fx.sources.local("./pets", labels="folders")                  # cat/, dog/ → image labels
+fx.sources.local("./bought-photos", license="CC BY 4.0")      # say the licence when you know it</code></pre>
+<p><strong>Watch out:</strong> with no <code>license</code>, Felix records the files as your own. Say so if they are not.</p>
+<h3 id="fx-sources-video"><code>fx.sources.video</code></h3>
+<p><strong>Toddler words:</strong> a flip book. A video is thousands of pictures in a row; Felix keeps some pages, not all.</p>
+<p><strong>Why you'd use it:</strong> your own footage (a greenhouse walk, a dashcam) is the closest thing to what the model will see later. Each frame remembers its video, frame number and time.</p>
+<pre><code>fx.sources.video("./greenhouse.mp4", sampling=fx.sampling.auto())
+fx.sources.video("./drive.mp4", sampling=fx.sampling.interval(seconds=2))</code></pre>
+<p><strong>Watch out:</strong> video needs OpenCV: <code>pip install "felix[video]"</code>.</p>
+<h3 id="fx-sources-camera"><code>fx.sources.camera</code></h3>
+<p><strong>Toddler words:</strong> a camera that keeps taking pictures while you watch, and Felix keeps the good ones.</p>
+<p><strong>Why you'd use it:</strong> collect data live from a webcam, a USB camera or a network stream, right where the model will be used.</p>
+<pre><code>fx.sources.camera(device=0, sampling=fx.sampling.interval(seconds=1), count=500, duration=None)
+fx.sources.camera("rtsp://192.168.1.20/stream", sampling=fx.sampling.auto(), duration=600)</code></pre>
+<p><strong>Watch out:</strong> it runs until <code>count</code>, <code>duration</code>, the export's <code>pairs</code>, or Ctrl+C. <code>fx.sampling.random</code> can't be used (there is no "whole video" to pick from).</p>
+<h3 id="fx-sampling-auto"><code>fx.sampling.auto</code></h3>
+<p><strong>Toddler words:</strong> only turn the page when something changed. A still scene gives one picture, not a hundred copies.</p>
+<p><strong>Why you'd use it:</strong> the best default. A minute of video is 1,800 frames, nearly all the same; <code>auto</code> keeps more frames when things move and fewer when nothing happens.</p>
+<pre><code>fx.sampling.auto(threshold=0.04, min_gap=0.5, max_gap=None, check_fps=4, limit=None)</code></pre>
+<p><strong>Watch out:</strong> if it keeps too few frames, lower <code>threshold</code> (0.02); too many, raise it. <code>max_gap=10</code> forces a frame at least every 10 seconds.</p>
+<h3 id="fx-sampling-interval"><code>fx.sampling.interval</code></h3>
+<p><strong>Toddler words:</strong> take a picture every few seconds, like a clock.</p>
+<p><strong>Why you'd use it:</strong> predictable spacing, e.g. one frame a second from a camera, or every 2 seconds of a drive.</p>
+<pre><code>fx.sampling.interval(seconds=2, start=0, limit=None)</code></pre>
+<h3 id="fx-sampling-random"><code>fx.sampling.random</code></h3>
+<p><strong>Toddler words:</strong> close your eyes and point at a thousand pages of the flip book.</p>
+<p><strong>Why you'd use it:</strong> frames spread over the whole video, the same ones every time (<code>seed</code>). Good for long videos where you want a fixed number of frames.</p>
+<pre><code>fx.sampling.random(count=1000, seed=42)</code></pre>
+<p><strong>Watch out:</strong> not available for live cameras (there is no "whole video" to pick from).</p>
+<h3 id="fx-sources-urls"><code>fx.sources.urls</code></h3>
+<p><strong>Toddler words:</strong> a list of addresses; Felix goes to each one and brings back the picture.</p>
+<p><strong>Why you'd use it:</strong> you already have links to the pictures you want (from a spreadsheet, a scrape you're allowed to do, a partner's list).</p>
+<pre><code>fx.sources.urls("./leaf_urls.txt", license=None, attribution=None)
+fx.sources.urls(["https://example.org/a.jpg", "https://example.org/b.jpg"], license="CC0-1.0")</code></pre>
+<p><strong>Watch out:</strong> "public on the internet" is not "free to use". These licences are unknown unless you say; export reminds you.</p>
+<h3 id="choosing-an-online-source">Choosing an online source</h3>
+<p><strong>Toddler words:</strong> libraries of free pictures. Ask for "oak trees" and they hand you oak trees, with a note saying who took each one and how you may use it.</p>
+<p><strong>Why you'd use it:</strong> lots of real, varied pictures with clear licences, for free. Pick by what you need:</p>
+<table><thead><tr><th>Need</th><th>Source</th></tr></thead><tbody><tr><td>anything, any topic</td><td><code>wikimedia</code>, <code>openverse</code>, <code>flickr</code></td></tr><tr><td>plants and animals</td><td><code>inaturalist</code> (by taxon), <code>gbif</code></td></tr><tr><td>space, science</td><td><code>nasa</code></td></tr><tr><td>art, objects, history</td><td><code>artic</code>, <code>smithsonian</code></td></tr><tr><td>high-quality stock photos</td><td><code>unsplash</code>, <code>pexels</code> (keys needed)</td></tr><tr><td>street scenes</td><td><code>mapillary</code></td></tr><tr><td>already labelled</td><td><code>open_images</code>, <code>coco</code>, <code>roboflow</code>, <code>huggingface</code>, <code>kaggle</code></td></tr></tbody></table>
+<p><strong>No target: take whatever comes.</strong> Leave the query out and a source gives you whatever it has: its own "anything" feed (random Commons files, the newest Unsplash photos, any species on iNaturalist). A source without such a feed, or once its feed runs dry, works through a built-in vocabulary of about 4,600 subjects: the tag list of Recognize Anything (RAM++), from "abacus" to "wind turbine", plus everyday subjects. It asks for them in shuffled order, at most 25 pictures per subject, so no subject takes over.</p>
+<pre><code>fx.acquire([fx.sources.wikimedia(), fx.sources.openverse(), fx.sources.artic()])
+fx.sources.openverse(limit=500).using(vocabulary="general")                          # ~150 everyday subjects only
+fx.sources.openverse(limit=500).using(vocabulary=["oak", "maple", "pine"], per_term=50)   # your own subjects</code></pre>
+<p><strong>Watch out:</strong> a slow or paused provider never holds up the others: it waits in the background while the rest keep going, and gives up quietly when the export is done.</p>
+<h3 id="fx-sources-wikimedia"><code>fx.sources.wikimedia</code></h3>
+<p><strong>Toddler words:</strong> the picture library behind Wikipedia: millions of photos anyone may reuse, each with a note saying who made it.</p>
+<p><strong>Why you'd use it:</strong> almost every subject, mostly real photos, clear licences. Without a query: random files.</p>
+<pre><code>fx.sources.wikimedia(query="plant leaves", limit=500, licenses=["CC0", "CC BY"], max_side=2048, min_side=256)
+fx.sources.wikimedia(limit=1000)                         # random Commons pictures</code></pre>
+<p><strong>Watch out:</strong> set <code>FELIX_CONTACT</code> (your email or a URL) first; Wikimedia refuses programs that don't say how to reach their operator.</p>
+<h3 id="fx-sources-openverse"><code>fx.sources.openverse</code></h3>
+<p><strong>Toddler words:</strong> one search box over many free picture libraries at once (Flickr, Wikimedia, museums).</p>
+<p><strong>Why you'd use it:</strong> the widest single search for openly licensed photos, no key needed, attribution text included.</p>
+<pre><code>fx.sources.openverse(query="tomato plant", limit=500, licenses=None, commercial=True, source=None)
+fx.sources.openverse(query="bicycle", source="flickr")    # only one of its providers</code></pre>
+<p><strong>Watch out:</strong> <code>commercial=True</code> (the default) keeps only licences that allow commercial use.</p>
+<h3 id="fx-sources-flickr"><code>fx.sources.flickr</code></h3>
+<p><strong>Toddler words:</strong> the giant photo-sharing site, but only the photos their owners said everyone may reuse.</p>
+<p><strong>Why you'd use it:</strong> huge variety of everyday photos. Without a query: recent uploads with reusable licences.</p>
+<pre><code>fx.sources.flickr(query="street market", limit=1000, licenses=(4, 5, 7, 8, 9, 10, 11, 12), api_key=None)</code></pre>
+<p><strong>Watch out:</strong> needs a free API key (<code>FLICKR_API_KEY</code>); a search returns at most 4,000 results; the API is for non-commercial use unless you arrange otherwise with Flickr.</p>
+<h3 id="fx-sources-unsplash"><code>fx.sources.unsplash</code></h3>
+<p><strong>Toddler words:</strong> a shop of beautiful, free professional photos.</p>
+<p><strong>Why you'd use it:</strong> sharp, well-lit pictures. Without a query: the newest photos.</p>
+<pre><code>fx.sources.unsplash(query="coffee cup", limit=200, size="regular", orientation=None, api_key=None)</code></pre>
+<p><strong>Watch out:</strong> needs a key (<code>UNSPLASH_ACCESS_KEY</code>); demo keys allow 50 requests an hour. Its licence forbids building a competing photo service, so export flags Unsplash photos in openly released datasets.</p>
+<h3 id="fx-sources-pexels"><code>fx.sources.pexels</code></h3>
+<p><strong>Toddler words:</strong> another shop of free professional photos.</p>
+<p><strong>Why you'd use it:</strong> like Unsplash, more stock-style subjects. Without a query: Pexels' curated photos.</p>
+<pre><code>fx.sources.pexels(query="kitchen", limit=200, size="large2x", orientation=None, api_key=None)</code></pre>
+<p><strong>Watch out:</strong> needs a key (<code>PEXELS_API_KEY</code>); 200 requests an hour, so pages come about 18 seconds apart. Same licence caveat as Unsplash.</p>
+<h3 id="fx-sources-inaturalist"><code>fx.sources.inaturalist</code></h3>
+<p><strong>Toddler words:</strong> nature lovers' photos of plants and animals, each checked by experts so the species name is right.</p>
+<p><strong>Why you'd use it:</strong> the best source for species: real photos in the wild, with the species name, which <code>label=True</code> turns into the image's class.</p>
+<pre><code>fx.sources.inaturalist(taxon="Quercus", limit=500, licenses=("cc0", "cc-by", "cc-by-sa"), size="large",
+                       quality="research", label=False, place_id=None)
+fx.sources.inaturalist(limit=1000)                       # any species</code></pre>
+<p><strong>Watch out:</strong> each search stops at 10,000 results; use narrower taxa for more.</p>
+<h3 id="fx-sources-gbif"><code>fx.sources.gbif</code></h3>
+<p><strong>Toddler words:</strong> the world's big list of "where was this plant or animal seen", from museums and scientists, with photos.</p>
+<p><strong>Why you'd use it:</strong> museum specimens and field photos, including species iNaturalist has few of.</p>
+<pre><code>fx.sources.gbif(scientific_name="Pica pica", query=None, limit=500, licenses=("CC0_1_0", "CC_BY_4_0"), country=None)</code></pre>
+<p><strong>Watch out:</strong> many pictures are herbarium sheets or drawers of pinned insects: great for some tasks, odd for others.</p>
+<h3 id="fx-sources-nasa"><code>fx.sources.nasa</code></h3>
+<p><strong>Toddler words:</strong> NASA's photo album: rockets, planets, astronauts, Earth from space.</p>
+<pre><code>fx.sources.nasa(query="mars rover", limit=200, size="large")
+fx.sources.nasa(limit=500)                               # anything</code></pre>
+<p><strong>Watch out:</strong> generally not copyrighted in the US, but some items are third-party or show people and logos.</p>
+<h3 id="fx-sources-artic"><code>fx.sources.artic</code></h3>
+<p><strong>Toddler words:</strong> the Art Institute of Chicago's paintings and objects that belong to everyone (public domain).</p>
+<pre><code>fx.sources.artic(query="still life", limit=300)</code></pre>
+<p><strong>Watch out:</strong> its API sits behind a bot check that sometimes refuses programs for a while; Felix then says so. Images are 843 pixels wide, as the museum asks.</p>
+<h3 id="fx-sources-smithsonian"><code>fx.sources.smithsonian</code></h3>
+<p><strong>Toddler words:</strong> the Smithsonian museums' free pictures: fossils, planes, stamps, art, animals.</p>
+<pre><code>fx.sources.smithsonian(query="aircraft", limit=300, api_key=None)</code></pre>
+<p><strong>Watch out:</strong> works without a key on a shared demo key; get your own (<code>API_DATA_GOV_KEY</code>) for anything sizeable.</p>
+<h3 id="fx-sources-open-images"><code>fx.sources.open_images</code></h3>
+<p><strong>Toddler words:</strong> Google's huge box of photos that already have boxes drawn on them, 600 kinds of things.</p>
+<p><strong>Why you'd use it:</strong> ready-labelled pictures. Without <code>classes</code>: your classes.yml's classes it has, or all 600.</p>
+<pre><code>fx.sources.open_images(classes=["Car", "Person"], split="validation", limit=1000, seed=0, group_of=True)</code></pre>
+<p><strong>Watch out:</strong> the <code>train</code> split's annotation tables are several GB (downloaded once); <code>validation</code> is ~40 MB.</p>
+<h3 id="fx-sources-coco"><code>fx.sources.coco</code></h3>
+<p><strong>Toddler words:</strong> the most famous box of labelled photos: everyday scenes, 80 kinds of things.</p>
+<pre><code>fx.sources.coco(split="val2017", limit=None)             # 5,000 images, ~1 GB</code></pre>
+<p><strong>Watch out:</strong> <code>train2017</code> is 118,000 images (~18 GB). With a class file only images containing those classes come.</p>
+<h3 id="fx-sources-roboflow"><code>fx.sources.roboflow</code></h3>
+<p><strong>Toddler words:</strong> a dataset you (or someone on Roboflow Universe) already made, fetched with its boxes.</p>
+<pre><code>fx.sources.roboflow("my-workspace/leaves", version=3, workspace=None, api_key=None)</code></pre>
+<p><strong>Watch out:</strong> needs <code>ROBOFLOW_API_KEY</code>. A Universe project without a licence means all rights reserved.</p>
+<h3 id="fx-sources-huggingface"><code>fx.sources.huggingface</code></h3>
+<p><strong>Toddler words:</strong> a dataset from the Hugging Face hub; only the rows you take are downloaded.</p>
+<pre><code>fx.sources.huggingface("cats_vs_dogs", split="train", config=None, limit=2000, label_column=None, bbox_format="xywh")</code></pre>
+<p><strong>Watch out:</strong> gated or private datasets need <code>HF_TOKEN</code>.</p>
+<h3 id="fx-sources-kaggle"><code>fx.sources.kaggle</code></h3>
+<p><strong>Toddler words:</strong> a dataset from Kaggle, downloaded and opened like a folder on your computer.</p>
+<pre><code>fx.sources.kaggle("owner/dataset-name", labels=None)     # labels="folders" for class folders</code></pre>
+<p><strong>Watch out:</strong> needs your Kaggle API key (<code>~/.kaggle/kaggle.json</code>). Check the dataset's licence on its Kaggle page.</p>
+<h3 id="fx-sources-mapillary"><code>fx.sources.mapillary</code></h3>
+<p><strong>Toddler words:</strong> street pictures taken by people driving and walking around, pinned on a map.</p>
+<pre><code>fx.sources.mapillary(bbox=(13.40, 52.51, 13.41, 52.52), limit=500, access_token=None)   # lon/lat box</code></pre>
+<p><strong>Watch out:</strong> the map area must be smaller than 0.01° on each side; needs <code>MAPILLARY_TOKEN</code>. Images are CC BY-SA.</p>
+<h3 id="credentials">Credentials</h3>
+<p><strong>Toddler words:</strong> some libraries want a membership card (a key) before they hand out pictures.</p>
+<p><strong>Why you'd use it:</strong> Unsplash, Pexels, Flickr, Roboflow, Mapillary and Kaggle need one; Smithsonian and Hugging Face work better with one. Put keys in the call, an environment variable, or one file:</p>
+<pre><code># ~/.config/felix/credentials.yml
+contact: you@example.com
+unsplash_access_key: ...
+pexels_api_key: ...
+flickr_api_key: ...</code></pre>
+<p><strong>Watch out:</strong> never put keys in a script you share; use the file or environment variables.</p>
+<h3 id="how-fast-does-it-go">How fast does it go?</h3>
+<p><strong>Toddler words:</strong> Felix sends many helpers at once, each fetching a picture, instead of one helper doing every trip.</p>
+<p>Each source downloads up to 16 pictures at a time over reused connections, different sources run side by side, and search APIs are still asked as politely as their rules say. A server that says "slow down" pauses only itself. Downloaded pictures are kept in <code>~/.cache/felix/images</code>, so running the same export again (after changing a transform or the model) is almost instant. See <a href="sources.html#speed">Sources → Speed</a>.</p>
+<pre><code>fx.acquire([fx.sources.open_images(classes=["Car"], limit=2000)])
+fx.export("./datasets/cars.felix")        # first run: downloads, 16 at a time
+# change a transform, then run again: pictures come from ~/.cache/felix/images</code></pre>
+<pre><code>FELIX_IMAGE_CACHE_GB=50 python make_cars.py   # a bigger download cache
+FELIX_IMAGE_CACHE=0 python make_cars.py       # no cache at all</code></pre>
+<p>---</p>
+<h2 id="part-3-changing-the-pictures">Part 3 · Changing the pictures</h2>
+<h3 id="fx-transform"><code>fx.transform</code></h3>
+<p><strong>Toddler words:</strong> the workbench. Each line puts one tool on the bench (crop, resize, copy, blur…), and every picture goes past the tools in the order you wrote them.</p>
+<p><strong>Why you'd use it:</strong> raw pictures are all sizes and shapes; models want them tidy. The boxes always move with the pixels, and a box that loses most of its area (<code>min_visibility</code>) is dropped.</p>
+<pre><code>fx.transform.dedupe()                     # 1. no copies
+fx.transform.center_crop(size=640)        # 2. same size
+fx.annotate(model=fx.models.yoloe)        #    (boxes)
+fx.transform.augment(copies=2)            # 3. more variety</code></pre>
+<p><strong>Watch out:</strong> order matters. Crop *before* annotating (faster, and the model sees what the dataset keeps); augment *after* (copies inherit the boxes); nothing that resizes or turns pixels after <code>consequential</code>.</p>
+<h3 id="fx-transform-center-crop"><code>fx.transform.center_crop</code></h3>
+<p><strong>Toddler words:</strong> cut the edges off so every picture is the same size, keeping the middle.</p>
+<p><strong>Why you'd use it:</strong> shrink big photos before annotating (faster, and the subject is usually in the middle). Boxes cut off at the edge are trimmed, or dropped if most of them is gone.</p>
+<pre><code>fx.transform.center_crop(size=640, min_visibility=0.3)
+fx.transform.center_crop(size=(800, 600))</code></pre>
+<p><strong>Watch out:</strong> things near the edge are lost. If they matter, use <code>letterbox</code>.</p>
+<h3 id="fx-transform-letterbox"><code>fx.transform.letterbox</code></h3>
+<p><strong>Toddler words:</strong> shrink the whole picture to fit the frame and fill the empty strips with grey, like a widescreen film on an old TV.</p>
+<p><strong>Why you'd use it:</strong> nothing is cut, so every object survives. Suits general detectors and wide street scenes.</p>
+<pre><code>fx.transform.letterbox(size=640, fill=(114, 114, 114))</code></pre>
+<p><strong>Watch out:</strong> tall or wide pictures get large grey bars, so their objects end up smaller.</p>
+<h3 id="fx-transform-consequential"><code>fx.transform.consequential</code></h3>
+<p><strong>Toddler words:</strong> zoom in on each toy and take a photo of it, plus a few photos of empty floor so the brain learns what "nothing" looks like.</p>
+<p><strong>Why you'd use it:</strong> in a 4,000-pixel photo a leaf may be 40 pixels: resized to 640 for training it nearly vanishes. Crops around each object keep them big enough to learn; <code>negative_rate</code> of the crops show no objects.</p>
+<pre><code>fx.annotate(model=model)                                   # first: it needs the boxes
+fx.transform.consequential(size=640, negative_rate=0.15, margin=0.25, min_visibility=0.3, overlap=0.6, seed=0)</code></pre>
+<p><strong>Watch out:</strong> it must come after <code>fx.annotate</code>, and nothing that resizes, turns or shifts pixels may follow it (<code>augment</code> with only flips and colour may). Felix stops you if the order is wrong.</p>
+<h3 id="fx-transform-augment"><code>fx.transform.augment</code></h3>
+<p><strong>Toddler words:</strong> take each photo and make a few funny copies: flipped like in a mirror, a little turned, darker, brighter, blurrier. It's still the same leaf, and the box moves with it.</p>
+<p><strong>Why you'd use it:</strong> a model that only ever saw leaves facing left, in sunshine, gets confused by a leaf facing right on a cloudy day. Copies that vary the things that *shouldn't* matter teach it to ignore them. Most useful when you have few pictures.</p>
+<pre><code>fx.annotate(model=model)                     # first: label the real pictures, the copies inherit the labels
+fx.transform.augment(
+    copies=2,                # new versions per picture; the original stays (keep_original=True)
+    flip=0.5,                # chance of a mirror image
+    vflip=0.0,               # chance of upside down (aerial photos: yes; street scenes: no)
+    rotate=10,               # up to ±10 degrees
+    scale=0.2,               # 80 % to 120 % size
+    translate=0.1,           # shifted up to 10 % of the size
+    brightness=0.2, contrast=0.2, saturation=0.2, hue=5,
+    blur=0.05, noise=0.0, grayscale=0.02, jpeg=0.0,
+    cutout=0.0,              # chance of a grey patch (teaches "a partly hidden leaf is still a leaf")
+    seed=0,
+)</code></pre>
+<p><strong>Watch out:</strong> only vary what really varies where the model will be used. Upside-down street scenes or purple tomatoes teach it things that never happen. Copies always stay in their original's train / val / test pile, so the final exam is never seen during learning.</p>
+<h3 id="fx-transform-mosaic"><code>fx.transform.mosaic</code></h3>
+<p><strong>Toddler words:</strong> four photos glued into one, like a window with four panes.</p>
+<p><strong>Why you'd use it:</strong> each picture shows more objects, at smaller sizes, against more different backgrounds. That helps detectors see small things and stop relying on the background.</p>
+<pre><code>fx.transform.mosaic(size=640, rate=0.25, seed=0)    # one mosaic for every four pictures, originals kept</code></pre>
+<p><strong>Watch out:</strong> only pictures from the same train / val / test pile are glued together. Each mosaic credits all four of its parts.</p>
+<h3 id="fx-transform-dedupe"><code>fx.transform.dedupe</code></h3>
+<p><strong>Toddler words:</strong> throw away the second copy of the same photo.</p>
+<p><strong>Why you'd use it:</strong> web searches and videos are full of near-copies. Copies make the model over-learn some pictures, and copies across train and test make test scores lie.</p>
+<pre><code>fx.transform.dedupe(threshold=4)        # higher = also drop pictures that are only nearly the same</code></pre>
+<h3 id="fx-transform-map-classes"><code>fx.transform.map_classes</code></h3>
+<p><strong>Toddler words:</strong> rename things: "Car" and "Truck" both become "vehicle".</p>
+<p><strong>Why you'd use it:</strong> datasets and models name things differently; this merges them into your names. <code>None</code> deletes a class's boxes.</p>
+<pre><code>fx.transform.map_classes({"Car": "vehicle", "Truck": "vehicle", "Person": None})</code></pre>
+<h3 id="fx-transform-filter-classes"><code>fx.transform.filter_classes</code></h3>
+<p><strong>Toddler words:</strong> keep only the boxes you care about, or throw away the ones you don't.</p>
+<pre><code>fx.transform.filter_classes(keep=["vehicle", "bicycle"])
+fx.transform.filter_classes(drop=["person"])</code></pre>
+<p><strong>Watch out:</strong> the picture stays even if all its boxes go; add <code>filter_images(require_objects=True)</code> to drop those too.</p>
+<h3 id="fx-transform-filter-images"><code>fx.transform.filter_images</code></h3>
+<p><strong>Toddler words:</strong> throw away pictures that are too small, oddly shaped, or don't pass your own test.</p>
+<pre><code>fx.transform.filter_images(min_width=320, min_height=320, max_aspect=3.0, require_objects=False)
+fx.transform.filter_images(where=lambda image, objects: len(objects) &lt;= 50)   # your own rule</code></pre>
+<h3 id="fx-transform-blur-faces"><code>fx.transform.blur_faces</code></h3>
+<p><strong>Toddler words:</strong> put a fuzzy sticker over everyone's face.</p>
+<p><strong>Why you'd use it:</strong> street, shop or crowd pictures show people who never agreed to be in your dataset. Each image records that it was blurred.</p>
+<pre><code>fx.transform.blur_faces(strength=1.0, min_size=20)
+fx.acquire([...], blur_faces=True)        # the same, as the very first step</code></pre>
+<p><strong>Watch out:</strong> it's best effort. Small or turned-away faces can be missed: check before publishing.</p>
+<h3 id="fx-transform-custom"><code>fx.transform.custom</code></h3>
+<p><strong>Toddler words:</strong> your own magic trick, done to every picture.</p>
+<pre><code>def sepia(image, objects):
+    from PIL import ImageOps
+    return ImageOps.colorize(image.convert("L"), "#402010", "#f0e0c0"), objects   # or None to drop the image
+
+fx.transform.custom(sepia, geometry=False, name="sepia")</code></pre>
+<p><strong>Watch out:</strong> if your trick moves pixels, set <code>geometry=True</code> and move the boxes yourself.</p>
+<p>---</p>
+<h2 id="part-4-drawing-the-boxes">Part 4 · Drawing the boxes</h2>
+<h3 id="fx-annotate"><code>fx.annotate</code></h3>
+<p><strong>Toddler words:</strong> a helper who looks at every picture and draws the boxes for you.</p>
+<p><strong>Why you'd use it:</strong> drawing boxes by hand takes forever. Pick a helper:</p>
+<table><thead><tr><th>Helper</th><th>Knows</th><th>Use it when</th></tr></thead><tbody><tr><td><code>fx.models.yolo26n</code> (also <code>s/m/l/x</code>)</td><td>80 everyday things (people, cars, dogs, cups…)</td><td>your classes are among them</td></tr><tr><td><code>fx.models.yoloe</code></td><td>whatever classes.yml names; without it, ~4,600 things</td><td>your classes are anything else</td></tr><tr><td><code>fx.models.sam</code></td><td>outlines for boxes that already exist</td><td>you need masks, not only boxes</td></tr><tr><td><code>wf.load("model.nbm")</code></td><td>what you trained it on</td><td>you have your own Workflow model</td></tr><tr><td>your function</td><td>whatever you write</td><td>another tool or a rule of your own</td></tr></tbody></table>
+<pre><code>fx.annotate(model=fx.models.yoloe, confidence=None, replace=False, batch_size=8)
+fx.annotate(model=wf.load("./models/leaf-detector.nbm"))
+fx.annotate(model=lambda image: [{"class": "leaf", "xyxy": [10, 10, 80, 90], "confidence": 0.9}])</code></pre>
+<p><strong>Watch out:</strong> a picture the model chokes on is marked failed and left out, never saved as "nothing here". Pictures that arrived with boxes (COCO, Open Images, …) keep them unless <code>replace=True</code>.</p>
+<h3 id="fx-models-yolo26n"><code>fx.models.yolo26n</code></h3>
+<p><strong>Toddler words:</strong> a fast helper who already knows 80 everyday things: people, cars, dogs, chairs, cups, phones.</p>
+<p><strong>Why you'd use it:</strong> your classes are among those 80. It's small, quick, works offline (it comes inside Felix) and is very sure of itself on what it knows.</p>
+<pre><code>fx.load_class("./classes.yml")            # e.g. classes: [person, car] (aliases map other names)
+fx.annotate(model=fx.models.yolo26n)
+fx.annotate(model=fx.models.yolo26n(device="cuda", imgsz=1280))   # bigger input: small objects found more often</code></pre>
+<p><strong>Watch out:</strong> it only finds those 80 classes; Felix tells you if none of your classes is one of them.</p>
+<h3 id="fx-models-yolo26s"><code>fx.models.yolo26s</code></h3>
+<p><strong>Toddler words:</strong> the same helper's bigger, more careful siblings: s (small), m, l, x (extra large).</p>
+<p><strong>Why you'd use it:</strong> more accurate boxes when speed matters less. Downloaded once into <code>~/.cache/felix/models</code>.</p>
+<pre><code>fx.annotate(model=fx.models.yolo26s)
+fx.annotate(model=fx.models.yolo26x(device="cuda"))</code></pre>
+<h3 id="fx-models-yoloe"><code>fx.models.yoloe</code></h3>
+<p><strong>Toddler words:</strong> a helper you can *tell* what to look for. Write "white tiger" in your list and it looks for white tigers. Give it no list and it names whatever it recognises, out of about 4,600 things.</p>
+<p><strong>Why you'd use it:</strong> your classes are not everyday COCO things: leaves, tomatoes, a particular tool. The prompts are your class names (or <code>prompt:</code> from classes.yml), and its boxes come back with your class names.</p>
+<pre><code>fx.load_class("./classes.yml")            # classes: [leaf, tomato, white tiger]
+fx.annotate(model=fx.models.yoloe)        # prompted with those three
+fx.annotate(model=fx.models.yoloe("yoloe-26l-seg.pt"))   # larger: better on hard prompts</code></pre>
+<p><strong>Watch out:</strong> prompted scores run low (0.1–0.4 is normal), so its default minimum is 0.1. Whole objects work best; parts ("bus window") are often missed. The first prompt downloads a ~254 MB text encoder once.</p>
+<h3 id="fx-models-sam"><code>fx.models.sam</code></h3>
+<p><strong>Toddler words:</strong> a helper who colours in exactly the shape of each thing inside a box someone already drew.</p>
+<p><strong>Why you'd use it:</strong> segmentation datasets (outlines, not only boxes). Use it after a box model, or on a dataset that came with boxes.</p>
+<pre><code>fx.annotate(model=fx.models.yoloe)        # boxes first
+fx.annotate(model=fx.models.sam)          # then outlines for them</code></pre>
+<p><strong>Watch out:</strong> it adds masks to existing boxes and never finds new objects; pictures without boxes are left as they are.</p>
+<h2 id="part-5-writing-the-dataset">Part 5 · Writing the dataset</h2>
+<h3 id="fx-export"><code>fx.export</code></h3>
+<p><strong>Toddler words:</strong> pack the box and write the label on it: what's inside, where each picture came from, and who may use it.</p>
+<p><strong>Why you'd use it:</strong> it runs every step above and writes the dataset Workflow trains from, plus LICENSE.txt, ATTRIBUTIONS.md and CITATION.cff. <code>pairs=</code> stops at a number; without it, it keeps going until the sources run out or you press Ctrl+C (the dataset is still closed properly).</p>
+<pre><code>fx.export("./datasets/leaves.felix", pairs=None, license=None, title=None, authors=None, strict=False)
+fx.export("./datasets/leaves", license="CC-BY-4.0", title="Leaves", authors=["Ann Lee"])   # a folder, released openly
+fx.export("./datasets/leaves.sh_felix", shard_size=1000)   # a folder of shards</code></pre>
+<p><strong>Watch out:</strong> <code>license=None</code> means closed (all rights reserved). For an open dataset, read the ⚠ lines in ATTRIBUTIONS.md, or use <code>license="auto"</code> (the most open licence every picture allows) and <code>strict=True</code> (leave out pictures that don't fit). See <a href="licensing.html">Licences</a>.</p>
+<h3 id="fx-load-and-its-splits"><code>fx.load</code> and its splits</h3>
+<p><strong>Toddler words:</strong> open the box. It already has three piles: <code>train</code> (learn from these), <code>val</code> (check while learning), <code>test</code> (the final exam).</p>
+<pre><code>data = fx.load("./datasets/leaves.felix")
+data.train, data.val, data.test, data.classes, data.splits</code></pre>
+<p>Imported datasets keep their piles; everything else is split 80 / 10 / 10, the same way every time. Copies, crops and mosaics follow their original.</p>
+<h3 id="fx-split"><code>fx.split</code></h3>
+<p><strong>Toddler words:</strong> photocopy the pile, then keep only part of the copy. The big pile stays as it was.</p>
+<p><strong>Why you'd use it:</strong> quick experiments on a tenth of the data; every split and class keeps its share.</p>
+<pre><code>fx.split("leaves.felix", 0.1, output="leaves-small.felix", size=None, seed=0)
+fx.split("leaves.felix", size=500)                                 # exactly 500 pairs</code></pre>
+<h3 id="fx-partition"><code>fx.partition</code></h3>
+<p><strong>Toddler words:</strong> cut the pile into several smaller piles, each a complete dataset.</p>
+<p><strong>Why you'd use it:</strong> sharing work between people or machines, or separate datasets per split.</p>
+<pre><code>fx.partition("leaves.felix", parts=4)
+fx.partition("leaves.felix", ratio=[70, 30], names=["big", "small"], shuffle=True)
+fx.partition("leaves.felix", by_split=True)                       # one per train / val / test</code></pre>
+<h3 id="fx-shard"><code>fx.shard</code></h3>
+<p><strong>Toddler words:</strong> spread a huge pile over many small boxes, so you only carry one box at a time.</p>
+<p><strong>Why you'd use it:</strong> datasets too big for memory or one file. Workflow trains from the folder, one shard at a time.</p>
+<pre><code>fx.shard("leaves.felix", output=None, size=1000)
+fx.export("./datasets/big.sh_felix", shard_size=1000)             # or export straight into shards</code></pre>
+<h3 id="fx-reset"><code>fx.reset</code></h3>
+<p><strong>Toddler words:</strong> wipe the whiteboard: forget the shopping list, the places and the tools, and start a new dataset.</p>
+<pre><code>fx.export("./datasets/leaves.felix")
+fx.reset()                                # the next lines describe a different dataset
+fx.acquire([fx.sources.nasa(query="rocket", limit=200)])
+fx.export("./datasets/rockets.felix")</code></pre>
+<h3 id="fx-felixerror"><code>fx.FelixError</code></h3>
+<p><strong>Toddler words:</strong> when something's wrong, Felix stops and tells you, in plain words, what to change.</p>
+<pre><code>try:
+    fx.export("./datasets/leaves.felix")
+except fx.FelixError as e:
+    print("fix this:", e)</code></pre>
+<p><strong>Watch out:</strong> problems with single pictures (a dead link, an unreadable file) never stop the run: they're counted and reported at the end.</p>
+<h3 id="felix-run"><code>felix run</code></h3>
+<p><strong>Toddler words:</strong> "do the recipe in this file".</p>
+<pre><code>felix run make_leaves.py
+felix run make_leaves.py --pairs 500          # extra words go to the script (sys.argv)</code></pre>
+<h3 id="felix-info"><code>felix info</code></h3>
+<p><strong>Toddler words:</strong> read the label on the box: how many pictures, which classes, which piles.</p>
+<pre><code>felix info leaves.felix
+felix info ./animals                          # class folders: images per class and split</code></pre>
+<h3 id="felix-pack"><code>felix pack</code></h3>
+<p><strong>Toddler words:</strong> put a folder of pictures into one tidy box (one <code>.felix</code> file) that's easy to copy.</p>
+<pre><code>felix pack ./leaves -o leaves.felix
+felix pack ./leaves_shards -o leaves.felix    # shards back into one file</code></pre>
+<h3 id="felix-unpack"><code>felix unpack</code></h3>
+<p><strong>Toddler words:</strong> open the box and spread everything out in a folder.</p>
+<pre><code>felix unpack leaves.felix -o ./leaves</code></pre>
+<h3 id="felix-convert"><code>felix convert</code></h3>
+<p><strong>Toddler words:</strong> take someone else's box (COCO, YOLO, class folders, a zip of pictures) and repack it the Felix way.</p>
+<pre><code>felix convert ./roboflow-export -o data.felix
+felix convert ./pets --labels folders -o pets.felix --license CC0-1.0</code></pre>
+<h3 id="felix-split"><code>felix split</code></h3>
+<p><strong>Toddler words:</strong> photocopy the pile, then keep only part of the copy. The big pile stays as it was.</p>
+<p><strong>Why you'd use it:</strong> quick experiments on a tenth of the data; every split and class keeps its share.</p>
+<pre><code>felix split leaves.felix 0.1 -o leaves-small.felix</code></pre>
+<h3 id="felix-partition"><code>felix partition</code></h3>
+<p><strong>Toddler words:</strong> cut the pile into several smaller piles, each a complete dataset.</p>
+<pre><code>felix partition leaves.felix --parts 4
+felix partition leaves.felix --ratio 70,30 --names big,small --shuffle
+felix partition leaves.felix --by-split          # one dataset per train / val / test</code></pre>
+<h3 id="felix-shard"><code>felix shard</code></h3>
+<p><strong>Toddler words:</strong> spread a huge pile over many small boxes, so you only carry one box at a time.</p>
+<p><strong>Why you'd use it:</strong> datasets too big for memory or one file. Workflow trains from the folder, one shard at a time.</p>
+<pre><code>felix shard leaves.felix --size 1000
+felix shard leaves.felix --shards 16</code></pre>
+<h3 id="felix-library"><code>felix library</code></h3>
+<p><strong>Toddler words:</strong> this book, in your terminal: every tool, with what it is, why, and an example. Type to search.</p>
+<pre><code>felix library
+felix library augment</code></pre>
+<h2 id="part-6-recipes">Part 6 · Recipes</h2>
+<h3 id="1-a-detector-for-your-own-thing-from-your-own-photos">1. A detector for your own thing, from your own photos</h3>
+<p><strong>Toddler words:</strong> Your own photos, a helper draws the boxes, you zoom in on each fruit, and make a few funny copies.</p>
+<p>You have 300 photos of tomato plants and want a fruit detector. YOLOE draws the first boxes, crops keep small fruit big, and augmentation stretches 300 photos further.</p>
+<pre><code>import felix as fx
+
+fx.load_class("./classes.yml")              # classes: [tomato]
+fx.acquire([fx.sources.local("./raw/tomatoes")])
+fx.annotate(model=fx.models.yoloe)
+fx.transform.consequential(size=640, negative_rate=0.15)
+fx.transform.augment(copies=2, flip=0.5, scale=0, translate=0, brightness=0.25, hue=4)   # after crops: flips + colour
+fx.export("./datasets/tomatoes.felix")</code></pre>
+<h3 id="2-topping-up-with-the-web">2. Topping up with the web</h3>
+<p><strong>Toddler words:</strong> Your photos are a good start; borrow more from free libraries so the model sees more kinds of tomato.</p>
+<p>Same classes, more variety: your photos plus openly licensed ones, without copies.</p>
+<pre><code>fx.load_class("./classes.yml")
+fx.acquire([
+    fx.sources.local("./raw/tomatoes"),
+    fx.sources.openverse(query="tomato plant", limit=1000),
+    fx.sources.inaturalist(taxon="Solanum lycopersicum", limit=1000),
+    fx.sources.open_images(classes=["Tomato"], limit=1000),     # already labelled: kept as they are
+])
+fx.transform.dedupe()
+fx.transform.center_crop(size=1024)
+fx.annotate(model=fx.models.yoloe)
+fx.export("./datasets/tomatoes-plus.felix")</code></pre>
+<h3 id="3-a-general-purpose-dataset-of-anything">3. A general-purpose dataset of anything</h3>
+<p><strong>Toddler words:</strong> Grab whatever pictures the libraries have and let the helper name everything it sees.</p>
+<p>No class file and no queries: random pictures from several collections, labelled with whatever the prompt-free model recognises. Runs until 10,000 pairs (or Ctrl+C).</p>
+<pre><code>fx.acquire([fx.sources.wikimedia(), fx.sources.openverse(), fx.sources.nasa(), fx.sources.open_images()])
+fx.transform.dedupe()
+fx.transform.letterbox(size=640)
+fx.annotate(model=fx.models.yoloe)
+fx.export("./datasets/anything.sh_felix", pairs=10_000, shard_size=1000)</code></pre>
+<h3 id="4-a-species-classifier">4. A species classifier</h3>
+<p><strong>Toddler words:</strong> One word per picture ("oak", "maple", "beech") instead of boxes, straight from nature photographers.</p>
+<p>One label per picture instead of boxes: iNaturalist names each photo's species.</p>
+<pre><code>fx.acquire([
+    fx.sources.inaturalist(taxon="Quercus robur", limit=800, label=True),
+    fx.sources.inaturalist(taxon="Acer pseudoplatanus", limit=800, label=True),
+    fx.sources.inaturalist(taxon="Fagus sylvatica", limit=800, label=True),
+])
+fx.transform.center_crop(size=384)
+fx.transform.augment(copies=1, flip=0.5, rotate=15, brightness=0.2)
+fx.export("./datasets/trees.felix")</code></pre>
+<h3 id="5-from-a-video-to-a-dataset">5. From a video to a dataset</h3>
+<p><strong>Toddler words:</strong> Film it once; Felix keeps the frames where something changed and blurs faces.</p>
+<pre><code>fx.load_class("./classes.yml")
+fx.acquire([fx.sources.video("./greenhouse.mp4", sampling=fx.sampling.auto())], blur_faces=True)
+fx.annotate(model=wf.load("./models/leaf-detector.nbm"))
+fx.export("./datasets/greenhouse.felix")</code></pre>
+<h3 id="6-releasing-a-dataset-openly">6. Releasing a dataset openly</h3>
+<p><strong>Toddler words:</strong> Share it with the world, with only the pictures everyone may reuse, and a note crediting every photographer.</p>
+<p>Let Felix pick the most open licence every picture allows, and leave out any picture that doesn't fit.</p>
+<pre><code>fx.acquire([fx.sources.wikimedia(query="bicycle", limit=2000), fx.sources.openverse(query="bicycle", limit=2000)])
+fx.annotate(model=fx.models.yolo26n)
+fx.export("./release/bicycles", license="auto", strict=True, title="Bicycles", authors=["Ann Lee"], version="1.0")</code></pre>
+<h3 id="7-training-on-it-then-fine-tuning">7. Training on it, then fine-tuning</h3>
+<p><strong>Toddler words:</strong> Teach the brain with the new box of pictures, starting from what it already knows.</p>
+<p>The dataset goes straight into Workflow (its train / val piles are used as they are). To adapt a model you already trained to the new dataset, fine-tune it: the backbone stays frozen and only the later layers learn.</p>
+<pre><code>import workflow as wf
+model = wf.fine_tune("./models/leaf-detector.nbm", "./datasets/tomatoes.felix", epochs=30, freeze="backbone")</code></pre>
+<h3 id="8-trying-different-settings-quickly">8. Trying different settings quickly</h3>
+<p><strong>Toddler words:</strong> The pictures are already in the cupboard (the cache), so trying another setting takes seconds.</p>
+<p>The first export downloads; every later run of the same sources comes from the download cache. Change a transform or the model and run again: it takes seconds, not minutes.</p>
+<pre><code>fx.reset()                                  # forget the previous steps (same program)
+fx.acquire([fx.sources.open_images(classes=["Tomato"], limit=1000, seed=0)])   # same seed: same pictures
+fx.transform.letterbox(size=512)
+fx.export("./datasets/try-512.felix", overwrite=True)</code></pre></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

@@ -16,16 +16,16 @@ table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflo
 th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
-</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html" class="on">Install</a><a href="getting-started.html">Getting started</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="install">Install</h1>
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html" class="on">Install</a><a href="getting-started.html">Getting started</a><a href="cookbook.html">Cookbook</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="install">Install</h1>
 <h2 id="anywhere-index">Anywhere (index)</h2>
 <pre><code>pip install Pillow rich
 pip install --no-deps --no-index --find-links <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/simple/felix/ felix</code></pre>
 <p>Works on Linux, macOS and Windows (Python 3.8+). Check with <code>felix --version</code>.</p>
 <p>Why the extra flags:</p>
 <ul><li><strong><code>--no-index</code></strong>: pip must not search PyPI. A *different, public* package called <code>felix</code> lives there and would be installed instead of this one. Never use <code>--extra-index-url</code> for Felix.</li><li><strong><code>--no-deps</code></strong> and the separate <code>pip install Pillow rich</code>: with <code>--no-index</code> pip can't fetch dependencies from this page, so install them first the normal way.</li></ul>
-<p>Upgrade by adding <code>--upgrade --no-cache-dir</code>; pin a version with <code>felix==1.1.0</code>.</p>
+<p>Upgrade by adding <code>--upgrade --no-cache-dir</code>; pin a version with <code>felix==1.2.0</code>.</p>
 <h2 id="colab-notebooks-direct-link">Colab / notebooks (direct link)</h2>
-<pre><code>!pip install <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/files/felix-1.1.0-py3-none-any.whl</code></pre>
+<pre><code>!pip install <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/files/felix-1.2.0-py3-none-any.whl</code></pre>
 <h2 id="optional-parts">Optional parts</h2>
 <table><thead><tr><th>For</th><th>Install</th></tr></thead><tbody><tr><td>video files, cameras, streams, face blurring</td><td><code>pip install opencv-python</code></td></tr><tr><td>built-in annotation models (<code>fx.models.yolo26n</code>, <code>yoloe</code>, <code>sam</code>)</td><td><code>pip install ultralytics</code> (pulls in PyTorch; AGPL-3.0 licensed). YOLO26n and YOLOE-26s weights ship inside Felix; others download once</td></tr><tr><td>your own trained models</td><td>Workflow (<code>wf.load("model.nbm")</code>), same site</td></tr></tbody></table>
 <p>Without them Felix says what is missing when you use the feature.</p>

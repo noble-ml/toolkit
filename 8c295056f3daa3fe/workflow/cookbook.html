@@ -23,80 +23,13 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 <ul><li><strong>Toddler words</strong>: what it is.</li><li><strong>Why you'd use it</strong>: the reasoning, and where it usually sits.</li><li><strong>Example</strong>: every main argument shown.</li><li><strong>Watch out</strong>: the one mistake people make (when there is one).</li></ul>
 <p>---</p>
 <h2 id="part-1-felix-collecting-the-pictures">Part 1 · Felix: collecting the pictures</h2>
-<h3 id="fx-load-class"><code>fx.load_class</code></h3>
-<p><strong>Toddler words:</strong> the shopping list. Before going out, write down what you're looking for: "leaves". Felix only keeps boxes for things on the list.</p>
-<p><strong>Why you'd use it:</strong> it decides which classes the dataset has, what an open-vocabulary model is asked to find (<code>prompt</code>), and which names in other datasets or a model's labels mean the same thing (<code>aliases</code>).</p>
-<pre><code>fx.load_class("./classes.yml")</code></pre>
-<pre><code>classes:
-  - name: leaf
-    prompt: a green plant leaf
-    aliases: [leaves, Leaf]
-confidence: 0.3</code></pre>
-<p><strong>Watch out:</strong> without a class file, everything is kept: a COCO import brings all 80 classes, and a built-in model detects everything it knows.</p>
-<h3 id="fx-acquire-and-fx-sources"><code>fx.acquire</code> and <code>fx.sources.*</code></h3>
-<p><strong>Toddler words:</strong> the shopping trip. Point at the places pictures come from: your folder, a video, a website, a museum. Felix fetches them when the dataset is built.</p>
-<p><strong>Why you'd use it:</strong> real datasets mix sources. A folder of photos needs no preparation; COCO, YOLO and Felix datasets bring their boxes; online collections (Wikimedia, Openverse, iNaturalist, Open Images, Roboflow, …) bring each picture's licence and who to credit.</p>
-<pre><code>fx.acquire([
-    fx.sources.local("./raw/leaves", recursive=True, labels=None, license=None),
-    fx.sources.urls("./leaf_urls.txt", license=None),
-    fx.sources.wikimedia(query="plant leaves", limit=1000, licenses=None, max_side=2048),
-    fx.sources.open_images(classes=["Car", "Person"], split="validation", limit=None),
-], blur_faces=False)</code></pre>
-<p><strong>Watch out:</strong> "public on the internet" is not "free to use". URL lists have unknown licences; export reminds you.</p>
-<h3 id="fx-sources-video-and-fx-sampling"><code>fx.sources.video</code> and <code>fx.sampling</code></h3>
-<p><strong>Toddler words:</strong> a flip book. Felix keeps some pages, not all: when the picture changes (<code>auto</code>), every few seconds (<code>interval</code>), or a random handful (<code>random</code>).</p>
-<p><strong>Why you'd use it:</strong> a minute of video is 1,800 frames, nearly all the same. <code>auto</code> keeps one frame of a still scene and more when things move, so the dataset isn't 90% copies.</p>
-<pre><code>fx.sources.video("./greenhouse.mp4", sampling=fx.sampling.auto(threshold=0.04, min_gap=0.5))
-fx.sources.video("./street.mp4", sampling=fx.sampling.interval(seconds=2))
-fx.sources.video("./street.mp4", sampling=fx.sampling.random(count=1000, seed=42))
-fx.sources.camera(device=0, sampling=fx.sampling.interval(seconds=1), count=500)</code></pre>
-<h3 id="fx-transform-center-crop-letterbox"><code>fx.transform.center_crop</code>, <code>letterbox</code></h3>
-<p><strong>Toddler words:</strong> make every picture the same size. Center crop cuts the edges off; letterbox shrinks the whole picture and adds grey bars.</p>
-<p><strong>Why you'd use it:</strong> center crop shrinks big photos before annotating (faster, and the subject is usually in the middle); letterbox keeps every part of a scene, which suits general detectors. The boxes move with the pixels.</p>
-<pre><code>fx.transform.center_crop(size=640, min_visibility=0.3)
-fx.transform.letterbox(size=640, fill=(114, 114, 114))</code></pre>
-<h3 id="fx-transform-consequential"><code>fx.transform.consequential</code></h3>
-<p><strong>Toddler words:</strong> zoom in on each toy and take a photo of it, plus a few photos of empty floor so the brain learns what "nothing" looks like.</p>
-<p><strong>Why you'd use it:</strong> in a 4,000-pixel photo a leaf may be 40 pixels: resized to 640 for training it nearly vanishes. Crops around each object keep them big enough to learn, and <code>negative_rate</code> of the crops show no objects.</p>
-<pre><code>fx.annotate(model=model)                                   # first: it needs the boxes
-fx.transform.consequential(size=640, negative_rate=0.15, margin=0.25, min_visibility=0.3, overlap=0.6, seed=0)</code></pre>
-<p><strong>Watch out:</strong> it must come after <code>fx.annotate</code>, and nothing that changes geometry may follow it. Felix stops you if the order is wrong.</p>
-<h3 id="fx-annotate-and-fx-models"><code>fx.annotate</code> and <code>fx.models</code></h3>
-<p><strong>Toddler words:</strong> a helper who looks at every picture and draws the boxes for you.</p>
-<p><strong>Why you'd use it:</strong> drawing boxes by hand takes forever. Use your own trained Workflow model, or a built-in one: <code>yolo26n</code> knows 80 everyday things, <code>yoloe</code> finds whatever classes.yml describes, <code>sam</code> turns boxes into outlines.</p>
-<pre><code>fx.annotate(model=wf.load("./models/leaf-detector.nbm"), confidence=0.25, replace=False, batch_size=8)
-fx.annotate(model=fx.models.yolo26n)
-fx.annotate(model=fx.models.yoloe)        # prompted with classes.yml
-fx.annotate(model=fx.models.sam)          # masks for the boxes already there</code></pre>
-<p><strong>Watch out:</strong> a picture the model chokes on is marked failed and left out, never saved as "nothing here".</p>
-<h3 id="fx-export"><code>fx.export</code></h3>
-<p><strong>Toddler words:</strong> pack the box and write the label on it: what's inside, where each picture came from, and who may use it.</p>
-<p><strong>Why you'd use it:</strong> it runs everything above and writes the dataset Workflow trains from, plus LICENSE.txt, ATTRIBUTIONS.md and CITATION.cff. <code>pairs=</code> stops at a number; without it, it keeps going until the sources run out or you press Ctrl+C.</p>
-<pre><code>fx.export("./datasets/leaves.felix", pairs=None, license=None, title=None, authors=None, strict=False)
-fx.export("./datasets/leaves", license="CC-BY-4.0")        # a folder, released openly
-fx.export("./datasets/leaves.sh_felix", shard_size=1000)   # a folder of shards</code></pre>
-<p><strong>Watch out:</strong> <code>license=None</code> means closed (all rights reserved). For an open dataset, read the ⚠ lines in ATTRIBUTIONS.md: some image licences don't fit some dataset licences.</p>
-<h3 id="fx-load-and-its-splits"><code>fx.load</code> and its splits</h3>
-<p><strong>Toddler words:</strong> open the box. It already has three piles: <code>train</code> (learn from these), <code>val</code> (check while learning), <code>test</code> (the final exam).</p>
-<p><strong>Why you'd use it:</strong> you pass these piles straight to Workflow. Imported datasets keep their splits; everything else is split 80/10/10, the same way every time.</p>
-<pre><code>data = fx.load("./datasets/leaves.felix")
-data.train, data.val, data.test, data.classes, data.splits</code></pre>
-<h3 id="fx-split-felix-split"><code>fx.split</code> / <code>felix split</code></h3>
-<p><strong>Toddler words:</strong> photocopy the pile, then keep only part of the copy. The big pile stays exactly as it was.</p>
-<p><strong>Why you'd use it:</strong> quick experiments on a tenth of the data. Every split and class keeps its share.</p>
-<pre><code>fx.split("voc.felix", 0.5, output=None, size=None, seed=0)</code></pre>
-<h3 id="fx-shard-felix-shard"><code>fx.shard</code> / <code>felix shard</code></h3>
-<p><strong>Toddler words:</strong> a huge pile of photos goes into many small boxes, so you can carry one box at a time.</p>
-<p><strong>Why you'd use it:</strong> very large datasets. Workflow trains from a folder of shards one shard at a time.</p>
-<pre><code>fx.shard("voc.felix", output=None, size=1000)
-fx.export("./datasets/big.sh_felix")                       # or export straight into shards</code></pre>
-<h3 id="other-felix-commands">Other Felix commands</h3>
-<p><strong>Toddler words:</strong> look inside a box, zip it up, unzip it, and turn someone else's box into yours.</p>
-<pre><code>felix info leaves.felix
-felix pack ./leaves -o leaves.felix
-felix unpack leaves.felix -o ./leaves
-felix convert ./roboflow-export -o data.felix
-felix library</code></pre>
+<p>Felix has its own cookbook now: every source, transform (including augmentation), model and command, plus whole recipes from "my own photos" to "anything from the web". See the <strong>Felix cookbook</strong> (<code>felix library</code> in the terminal, or the Cookbook page of the Felix docs). The short version:</p>
+<pre><code>import felix as fx
+fx.load_class("./classes.yml")
+fx.acquire([fx.sources.local("./raw/leaves"), fx.sources.wikimedia(query="plant leaves", limit=500)])
+fx.annotate(model=fx.models.yoloe)
+fx.transform.augment(copies=2)
+fx.export("./datasets/leaves.felix")</code></pre>
 <p>---</p>
 <h2 id="part-2-workflow-the-brain-s-building-blocks">Part 2 · Workflow: the brain's building blocks</h2>
 <h3 id="wf-input"><code>wf.input</code></h3>
@@ -334,6 +267,11 @@ wf.eval(model, dataset=data.test)              # adds mAP50, mAP50-95, precision
 <pre><code>model.save("detector.nbm")
 model = wf.load("detector.nbm")       # rebuilds everything from the box
 model.load("detector.nbm")            # fills a model you already built the same way</code></pre>
+<h3 id="model-plot-model-export-graph"><code>model.plot</code>, <code>model.export_graph</code></h3>
+<p><strong>Toddler words:</strong> draw a map of the brain: every layer as a box, with arrows showing where the picture goes next.</p>
+<p><strong>Why you'd use it:</strong> to check that a model is wired the way you meant (skips, parallel branches, the head), or to put the architecture in a report.</p>
+<pre><code>model.plot(detail="layers", show=True)                    # opens the picture (returns it in a notebook)
+model.export_graph("arch.svg", detail="compact")          # one row per layer, as a file</code></pre>
 <h3 id="model-export"><code>model.export</code></h3>
 <p><strong>Toddler words:</strong> pack the brain for other programs (ONNX), or make a smaller box.</p>
 <p><strong>Why you'd use it:</strong> ONNX runs in many runtimes (ONNX Runtime, mobile, servers); an int8 <code>.nbm</code> is the smallest Workflow file.</p>
@@ -384,6 +322,7 @@ workflow script detector.nbm --preset webcam         # writes a ready-to-run cam
 workflow devices</code></pre>
 <p>---</p>
 <h2 id="part-6-recipes-how-the-pieces-fit">Part 6 · Recipes: how the pieces fit</h2>
+<p><strong>Toddler words:</strong> the building blocks put together into whole brains you can copy, from a single step to a full detector.</p>
 <p><strong>A downsampling step</strong> (the most common pattern in a backbone): three lines that halve the picture and add channels. You'll see it again and again in the detector below.</p>
 <pre><code>wf.Conv2D(64, kernel_size=3, stride=2, padding="same"),
 wf.BatchNorm2D(),
