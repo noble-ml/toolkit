@@ -308,13 +308,12 @@ model.device()            # which one am I on?</code></pre>
 <p><strong>Not enough memory?</strong> On CPU it checks first. If the batch won't fit it turns on <code>low_memory</code> (it forgets the in-between results and works them out again when it needs them: same answers, a bit slower), and if even that won't fit it tells you the biggest <code>batch_size</code> that does, before wasting any time.</p>
 <p>While it learns you see a bar, plus a table that gains a line every epoch: the training loss, the validation loss (how wrong it is on pictures it doesn't learn from) and the mAP scores. If the training loss keeps falling but the validation loss starts rising, the brain is memorising the training pictures instead of learning.</p>
 <p><strong>Watch out:</strong> <code>epochs</code> means "train *until* epoch N". To continue a model that reached 50, ask for <code>epochs=80</code> to get 30 more; <code>epochs=30</code> would do nothing.</p>
-<h3 id="fine-tuning-model-train-fine-tune-true-freeze">Fine-tuning: <code>model.train(..., fine_tune=True, freeze=...)</code></h3>
+<h3 id="wf-fine-tune"><code>wf.fine_tune</code></h3>
 <p><strong>Toddler words:</strong> a brain that already knows shapes learns a new kind of shape much faster than a brand-new brain.</p>
 <p><strong>Why you'd use it:</strong> you have a trained model and a small new dataset (maybe with other classes). Start from the trained weights instead of from nothing: on 46 pictures of two new shapes, a fine-tuned model reached mAP50 0.92 where one trained from scratch for the same 60 epochs got 0.005.</p>
-<pre><code>model = wf.load("runs/base/best.nbm")
-model.train(new_data, epochs=30, lr=1e-4, fine_tune=True, freeze="backbone")   # or freeze=10 (the first 10 layers)
-model.labels()                                                                 # the new dataset's classes</code></pre>
-<p><strong>Watch out:</strong> <code>fine_tune=True</code> starts a new run (fresh optimizer and schedule, <code>epochs</code> counts the new epochs). Without it, <code>train</code> continues the old run towards its total <code>epochs</code>. If the classes differ, only the head's last prediction layer starts over; everything else keeps what it learned.</p>
+<pre><code>model = wf.fine_tune("runs/base/best.nbm", new_data, epochs=30, lr=3e-4, freeze="backbone")   # or freeze=10
+model.labels()                                                                                 # the new dataset's classes</code></pre>
+<p><strong>Watch out:</strong> <code>wf.fine_tune</code> starts a new run (fresh optimizer and schedule, <code>epochs</code> counts the new epochs), while <code>model.train</code> on a loaded model continues the old run towards its total <code>epochs</code>. If the classes differ, only the head's last prediction layer starts over; everything else keeps what it learned.</p>
 <h3 id="wf-eval"><code>wf.eval</code></h3>
 <p><strong>Toddler words:</strong> a report card. Without a test: "how big and how fast am I?". With a test: "how many do I get right?".</p>
 <p><strong>Why you'd use it:</strong> before training to compare architectures (size, speed); after training to measure accuracy on the test pile. It never changes the model.</p>

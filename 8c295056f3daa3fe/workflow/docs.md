@@ -75,7 +75,7 @@ fit, the error says **what** happened, **why**, and **how to fix it**, naming th
 - **Composition**: `wf.input`, `wf.stack`, `wf.Residual` (automatic shortcut projection), `wf.recurrent` (looped blocks), `wf.parallel`, `wf.feature`, `wf.concat`, `wf.add`, `wf.FPN`, `wf.PAN`, `wf.head`.
 - **Two tasks**: detection (`wf.head(classes=N)`, boxes) and classification (`wf.head(classes=N, type="cls")`, one label per
   picture, trained on ImageNet-style class folders).
-- **Training**: one call with sensible defaults, including fine-tuning (`fine_tune=True`, `freeze=`) (AdamW, warm-up + cosine, GIoU + BCE loss, EMA, early stopping,
+- **Training**: one call with sensible defaults, plus `wf.fine_tune(model, data, freeze=...)` (AdamW, warm-up + cosine, GIoU + BCE loss, EMA, early stopping,
   `.nbm` checkpoints, crash protection: safe Ctrl+C / kill, autosave mid-epoch, exact resume; automatic low-memory
   mode on small machines).
 - **Evaluation**: `wf.eval(model)` (size, FLOPs, latency, FPS, memory) and `wf.eval(model, dataset=val)` (accuracy).
@@ -860,7 +860,7 @@ validation loss starts rising, the brain is memorising the training pictures ins
 **Watch out:** `epochs` means "train *until* epoch N". To continue a model that reached 50, ask for `epochs=80` to get
 30 more; `epochs=30` would do nothing.
 
-#### Fine-tuning: `model.train(..., fine_tune=True, freeze=...)`
+#### `wf.fine_tune`
 
 **Toddler words:** a brain that already knows shapes learns a new kind of shape much faster than a brand-new brain.
 
@@ -869,13 +869,12 @@ trained weights instead of from nothing: on 46 pictures of two new shapes, a fin
 one trained from scratch for the same 60 epochs got 0.005.
 
 ```python
-model = wf.load("runs/base/best.nbm")
-model.train(new_data, epochs=30, lr=1e-4, fine_tune=True, freeze="backbone")   # or freeze=10 (the first 10 layers)
-model.labels()                                                                 # the new dataset's classes
+model = wf.fine_tune("runs/base/best.nbm", new_data, epochs=30, lr=3e-4, freeze="backbone")   # or freeze=10
+model.labels()                                                                                 # the new dataset's classes
 ```
 
-**Watch out:** `fine_tune=True` starts a new run (fresh optimizer and schedule, `epochs` counts the new epochs). Without
-it, `train` continues the old run towards its total `epochs`. If the classes differ, only the head's last prediction
+**Watch out:** `wf.fine_tune` starts a new run (fresh optimizer and schedule, `epochs` counts the new epochs), while
+`model.train` on a loaded model continues the old run towards its total `epochs`. If the classes differ, only the head's last prediction
 layer starts over; everything else keeps what it learned.
 
 #### `wf.eval`
@@ -1653,7 +1652,7 @@ The outermost `wf.stack(...)` is the model.
 | `model.export(format=..., output=..., precision=...)`, `model.quantize(...)` | [Quantisation and export](#quantisation-and-export) |
 | `model(x, train=False)` | forward pass on a `(N, C, H, W)` Workflow tensor |
 | `model.history`, `model.class_names`, `model.precision` | training history, class names (from the dataset), `fp32` / `fp16` / `int8` |
-| `model.set_classes(names)` | re-targets the head at other classes: its last prediction layer starts afresh, every other weight is kept (what `train(..., fine_tune=True)` does when the classes differ) |
+| `model.set_classes(names)` | re-targets the head at other classes: its last prediction layer starts afresh, every other weight is kept (what `wf.fine_tune` does when the classes differ) |
 | `model.labels()`, `wf.labels("model.nbm")` | what the model detects (or classifies): its class names in class-id order (`"0"`, `"1"`, … before training on named classes); the file form reads only metadata |
 | `wf.practice_dataset(path, pairs=400, img_size=256, seed=1, max_objects=2)` | a small circles / squares / triangles detection dataset to try things out (stored through Felix) |
 
@@ -2139,11 +2138,11 @@ model.train("voc_shards/", epochs=100)          # a path, or fx.load("voc_shards
 ### Fine-tuning
 
 ```python
-model = wf.load("runs/base/best.nbm")
-model.train(new_data, epochs=30, lr=1e-4, fine_tune=True, freeze="backbone")
+model = wf.fine_tune("runs/base/best.nbm", new_data, epochs=30, freeze="backbone")   # a path or a loaded model
 ```
 
-- `fine_tune=True` starts a **new run** from the loaded weights: a fresh optimizer, learning-rate schedule and epoch
+- `wf.fine_tune(model, data, validation=None, epochs=30, *, lr=3e-4, freeze=None, output="runs/fine_tune", **train_options)`
+  starts a **new run** from the model's weights and returns the model: a fresh optimizer, learning-rate schedule and epoch
   count (`epochs` counts the fine-tuning epochs; the history starts again).
 - **Other classes:** if the dataset's classes differ from the model's, the head's last prediction layer is rebuilt for
   them (every other weight is kept) and the model takes the new class names. `model.set_classes(names)` does the same
@@ -2151,7 +2150,8 @@ model.train(new_data, epochs=30, lr=1e-4, fine_tune=True, freeze="backbone")
 - `freeze=N` keeps the first N layers after `wf.input` fixed; `freeze="backbone"` keeps everything before the first
   FPN / PAN / head. Frozen layers do not change, use their stored BatchNorm statistics, and need no gradient (faster).
   They are released when training ends.
-- A lower learning rate (1e-4 to 3e-4) usually suits; with a frozen backbone 1e-3 is fine.
+- Any `model.train` option can be passed (batch_size, device, img_size, augment, …). The default `lr` is 3e-4;
+  with a frozen backbone 1e-3 is fine.
 
 Measured on a small new dataset (46 training pictures of two shapes a base model never saw, 60 epochs, CPU, a few
 seconds each): from scratch mAP50 0.005; fine-tuned with a frozen backbone 0.916; fine-tuned with every layer 0.894
@@ -2519,8 +2519,9 @@ It reads only the file's metadata (no weights are loaded), so it is instant even
   `n` times with shared weights, for more depth without more parameters (at the cost of latency). The first
   convolution sets the width every convolution inside must keep; a projection handles a different input width at step
   1; BatchNorm keeps running statistics per step. See [Composition](#recurrent-blocks).
-- **Fine-tuning**: `model.train(..., fine_tune=True)` starts a new run from loaded weights (and re-targets the head if
-  the dataset's classes differ); `freeze=N` / `freeze="backbone"` keeps layers fixed; `model.set_classes(names)`.
+- **Fine-tuning**: `wf.fine_tune(model_or_path, data, freeze=...)` starts a new run from a trained model's weights
+  (and re-targets the head if the dataset's classes differ); `freeze=N` / `freeze="backbone"` keeps layers fixed;
+  `model.set_classes(names)`.
   On a small new dataset: mAP50 0.92 fine-tuned vs 0.005 from scratch. See [Training](#fine-tuning).
 - A training set whose images were all exported without annotations now says so, instead of "the split is empty".
 
