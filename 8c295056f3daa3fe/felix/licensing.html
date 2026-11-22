@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>felix · licences</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html" class="on">Licences</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="licences-and-provenance">Licences and provenance</h1>
+<p>Publicly visible images are not automatically free to reuse. Felix records what each provider says about an image, checks it against how you release the dataset, and writes the files that go with it. This is guidance from the licence names providers report, <strong>not legal advice</strong>: check the terms before publishing or using a dataset commercially.</p>
+<h2 id="what-every-image-records">What every image records</h2>
+<p>Its annotation file holds a <code>source</code> block, for example:</p>
+<pre><code>source:
+  type: wikimedia
+  title: "File:Sawtooth Oak Leaves.jpg"
+  url: https://upload.wikimedia.org/…/1024px-….jpg
+  page: https://commons.wikimedia.org/wiki/File:…
+  license: CC BY-SA 3.0
+  license_url: https://creativecommons.org/licenses/by-sa/3.0
+  author: Derek Ramsey
+  attribution: "Sawtooth Oak Leaves.jpg by Derek Ramsey, CC BY-SA 3.0, via Wikimedia Commons (https://…)"
+  query: plant leaves
+  acquired: "2026-11-21T09:15:02Z"</code></pre>
+<p>Depending on the source: original URL and file name, dataset id, licence and its URL, author and their page, attribution text, the provider's usage terms, acquisition time, and for video frames the video file, frame number and time. Transforms and annotation add <code>history</code>; face blurring adds <code>privacy</code>.</p>
+<h2 id="open-or-closed">Open or closed</h2>
+<pre><code>fx.export("leaves.felix")                          # closed (default)
+fx.export("leaves.felix", license="CC-BY-4.0")     # open, under this licence
+fx.export("leaves.felix", license="auto")          # open, under the most permissive licence every image allows
+fx.export("leaves.felix", license="CC-BY-4.0", strict=True)   # leave out images that do not fit</code></pre>
+<ul><li><strong>Closed</strong>: the compilation and annotations are all rights reserved (LICENSE.txt says so, naming <code>authors</code> as the owner). Third-party images keep their licences and are still credited. Felix flags images with unknown licences, all-rights-reserved images, non-commercial images (in case you use the data commercially) and no-derivatives images that were cropped.</li><li><strong>Open</strong>: everything above, plus conflicts with the chosen licence: non-commercial images under a licence that allows commercial use, share-alike images under a licence without share-alike, attribution-required images under CC0, your own files (confirm you hold the rights and people's consent), and photos whose licence does not clearly allow redistribution in a dataset (Unsplash, Pexels). <code>"auto"</code> picks CC0 if every image is free of conditions, CC BY 4.0 if some need credit, CC BY-SA 4.0 with share-alike images, and the NC variants if any image is non-commercial.</li></ul>
+<p>Problems never stop the export (unless <code>strict=True</code> leaves those images out). They are listed in ATTRIBUTIONS.md (marked ⚠) and counted in <code>metadata.yml</code> under <code>license</code>.</p>
+<h2 id="the-files">The files</h2>
+<table><thead><tr><th>File</th><th>Contents</th></tr></thead><tbody><tr><td><code>LICENSE.txt</code></td><td>the dataset's licence (or the closed notice), that images keep their own licences, and a count per image licence</td></tr><tr><td><code>ATTRIBUTIONS.md</code></td><td>every image: file, source, licence (with any ⚠ issue), author / credit, link</td></tr><tr><td><code>CITATION.cff</code></td><td>how to cite the dataset (title, authors, date, licence), plus the datasets and collections it draws on (Open Images, COCO, Wikimedia Commons, iNaturalist, …)</td></tr></tbody></table>
+<p>They sit next to the data: inside a <code>.felix</code> file, at the top of a dataset folder, or beside the shards.</p>
+<h2 id="faces">Faces</h2>
+<p><code>fx.transform.blur_faces()</code> (or <code>fx.acquire(..., blur_faces=True)</code>) blurs faces found by OpenCV's frontal and profile face detectors, and records how many in each image. It is best effort: small, turned, partly hidden or unusual faces can be missed. Do not rely on it alone for sensitive data.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

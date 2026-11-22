@@ -1,0 +1,80 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>felix · sources</title><style>
+:root{color-scheme:dark;--bg:#0b0b0b;--fg:#d9d4c7;--dim:#8a8a8a;--line:#262626;--red:#c1121f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:48rem;margin:0 auto;padding:2.5rem 16px 5rem}
+nav{display:flex;flex-wrap:wrap;gap:.4rem 1.3rem;margin-bottom:2.5rem;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover,nav a.on{color:var(--fg)}
+nav b{color:var(--fg)}nav .sep{color:var(--line)}
+h1,h2,h3{font-weight:600;line-height:1.25;margin:2.2rem 0 .8rem}h1{font-size:1.6rem;margin-top:0}
+h2{font-size:1.15rem;border-top:1px solid var(--line);padding-top:1.4rem}h3{font-size:1rem;color:var(--dim)}
+a{color:var(--fg);text-decoration-color:var(--red);text-underline-offset:3px}
+code{background:#161616;padding:.1em .35em;border-radius:3px;font-size:.92em}
+pre{background:#121212;border:1px solid var(--line);border-radius:4px;padding:1rem;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="sources.html" class="on">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="sources">Sources</h1>
+<p>Pass any mix to <code>fx.acquire([...])</code>. Every image keeps a <code>source</code> record in its annotation: where it came from, its licence, who to credit and when it was collected. <code>limit=None</code> (the default for online sources) means "as many as the provider gives": with <code>fx.export(..., pairs=N)</code> the export simply stops asking once it has N pairs.</p>
+<p>Online sources send a User-Agent naming Felix. Set <code>FELIX_CONTACT</code> (an email or URL) or <code>contact:</code> in <code>~/.config/felix/credentials.yml</code> to include a way to reach you, which Wikimedia's policy asks for. Requests to one provider go one at a time, spaced as its rules ask; different providers run in parallel.</p>
+<h2 id="credentials">Credentials</h2>
+<p>Keys go in the call (<code>api_key=...</code>), in an environment variable, or in <code>~/.config/felix/credentials.yml</code>:</p>
+<pre><code>contact: you@example.com
+roboflow_api_key: ...
+unsplash_access_key: ...
+pexels_api_key: ...
+flickr_api_key: ...
+api_data_gov_key: ...        # Smithsonian
+mapillary_token: ...
+huggingface_token: hf_...    # only for gated / private datasets</code></pre>
+<table><thead><tr><th>Source</th><th>Environment variable</th><th>Where to get it</th></tr></thead><tbody><tr><td>roboflow</td><td><code>ROBOFLOW_API_KEY</code></td><td>Roboflow → Settings → API Keys</td></tr><tr><td>unsplash</td><td><code>UNSPLASH_ACCESS_KEY</code></td><td>unsplash.com/oauth/applications (Access Key)</td></tr><tr><td>pexels</td><td><code>PEXELS_API_KEY</code></td><td>pexels.com/api</td></tr><tr><td>flickr</td><td><code>FLICKR_API_KEY</code></td><td>flickr.com/services/api/keys</td></tr><tr><td>smithsonian</td><td><code>API_DATA_GOV_KEY</code></td><td>api.data.gov/signup (works without, on a shared demo key)</td></tr><tr><td>mapillary</td><td><code>MAPILLARY_TOKEN</code></td><td>mapillary.com/dashboard/developers (client token)</td></tr><tr><td>huggingface</td><td><code>HF_TOKEN</code></td><td>huggingface.co/settings/tokens</td></tr><tr><td>kaggle</td><td><code>KAGGLE_USERNAME</code> + <code>KAGGLE_KEY</code></td><td>Kaggle → Settings → API (or <code>~/.kaggle/kaggle.json</code>)</td></tr></tbody></table>
+<h2 id="on-this-computer">On this computer</h2>
+<h3 id="fx-sources-local-path-recursive-true-labels-none-license-none"><code>fx.sources.local(path, recursive=True, labels=None, license=None)</code></h3>
+<ul><li>An image file, a folder of images (any nesting; <code>recursive=False</code> for the top level only) or an archive (<code>.zip</code>, <code>.tar</code>, <code>.tar.gz</code>, …, unpacked safely into a working folder).</li><li>Existing datasets are recognised and bring their labels and splits: <strong>Felix</strong> (<code>.felix</code>, folders, <code>.sh_felix</code> shards), <strong>COCO</strong> (any <code>*.json</code> with <code>images</code> / <code>annotations</code> / <code>categories</code>, e.g. Roboflow's <code>_annotations.coco.json</code> in <code>train/ valid/ test/</code>), <strong>YOLO</strong> (<code>data.yaml</code> with <code>names</code> and <code>images/</code> + <code>labels/</code>).</li><li><code>labels="folders"</code>: a folder of class folders (<code>cat/</code>, <code>dog/</code>, …) becomes image labels (classification).</li><li>Photos stored sideways by a camera (EXIF rotation) are turned upright.</li><li><code>license</code>: the images' licence if you know it; otherwise they are recorded as your own files.</li></ul>
+<h3 id="fx-sources-video-path-sampling-fx-sampling-auto"><code>fx.sources.video(path, sampling=fx.sampling.auto())</code></h3>
+<p>Frames of a video file (OpenCV: <code>pip install opencv-python</code>). Each frame records the video, frame number and time. See <a href="#sampling">Sampling</a>.</p>
+<h3 id="fx-sources-camera-device-0-sampling-fx-sampling-interval-seconds-1-count-none-duration-none"><code>fx.sources.camera(device=0, sampling=fx.sampling.interval(seconds=1), count=None, duration=None)</code></h3>
+<p>A webcam / USB camera (<code>device=0, 1, …</code>) or a stream URL (<code>"rtsp://…"</code>, <code>"http://…/video.mjpg"</code>). Runs until <code>count</code> frames, <code>duration</code> seconds, the export's <code>pairs</code>, or Ctrl+C. <code>random</code> sampling is not available for live cameras.</p>
+<h3 id="sampling">Sampling</h3>
+<ul><li><code>fx.sampling.auto(threshold=0.04, min_gap=0.5, max_gap=None, check_fps=4, limit=None)</code>: keep a frame when it differs from the last kept one by at least <code>threshold</code> (mean colour difference of small thumbnails), at least <code>min_gap</code> seconds apart. A still scene gives one frame, not hundreds. <code>max_gap</code> forces a frame every so often.</li><li><code>fx.sampling.interval(seconds=2, start=0, limit=None)</code>: one frame every <code>seconds</code>.</li><li><code>fx.sampling.random(count=1000, seed=42)</code>: <code>count</code> frames spread at random over the whole video, reproducibly.</li></ul>
+<h2 id="on-the-web">On the web</h2>
+<h3 id="fx-sources-urls-source-license-none-attribution-none"><code>fx.sources.urls(source, license=None, attribution=None)</code></h3>
+<p>One URL, a list, or a text file with one URL per line (<code>#</code> comments allowed). Their licences are unknown unless you say (<code>license=</code>, <code>attribution=</code>); export then reminds you to check your rights.</p>
+<h3 id="fx-sources-wikimedia-query-limit-none-licenses-none-max-side-2048-min-side-256"><code>fx.sources.wikimedia(query, limit=None, licenses=None, max_side=2048, min_side=256)</code></h3>
+<p>Wikimedia Commons (MediaWiki API, File namespace, bitmap images). Records licence, author, credit and the file page, and builds the attribution line. <code>licenses=["CC0", "Public domain", "CC BY 4.0"]</code> keeps only those (by the start of Commons' short licence name). Downloads a scaled copy up to <code>max_side</code>, not 50-megapixel originals.</p>
+<h3 id="fx-sources-openverse-query-limit-none-licenses-none-commercial-true-source-none"><code>fx.sources.openverse(query, limit=None, licenses=None, commercial=True, source=None)</code></h3>
+<p>Openverse: openly licensed images from Flickr, Wikimedia and many museums, in one search (no key). <code>commercial=True</code> keeps licences that allow commercial use; <code>licenses=["cc0", "by", "by-sa"]</code> to choose; <code>source="flickr"</code> for one provider. Openverse supplies the attribution text.</p>
+<h3 id="fx-sources-flickr-query-limit-none-licenses-4-5-7-8-9-10-11-12-api-key-none"><code>fx.sources.flickr(query, limit=None, licenses=(4, 5, 7, 8, 9, 10, 11, 12), api_key=None)</code></h3>
+<p>Flickr search filtered by licence id (default: CC BY, CC BY-SA, CC0, public domain and "no known copyright", i.e. commercial use and changes allowed). Flickr's API is for non-commercial use unless you arrange otherwise with Flickr, and returns at most 4,000 results per search.</p>
+<h3 id="fx-sources-unsplash-query-limit-none-size-regular-orientation-none-api-key-none"><code>fx.sources.unsplash(query, limit=None, size="regular", orientation=None, api_key=None)</code></h3>
+<p>Unsplash (Unsplash License). As Unsplash's API guidelines require, each download is reported to Unsplash. Demo apps are limited to 50 requests an hour.</p>
+<h3 id="fx-sources-pexels-query-limit-none-size-large2x-orientation-none-api-key-none"><code>fx.sources.pexels(query, limit=None, size="large2x", orientation=None, api_key=None)</code></h3>
+<p>Pexels (Pexels License; 200 requests an hour, so Felix waits ~18 s between result pages). The "Photo by … on Pexels" credit is recorded.</p>
+<p>Unsplash and Pexels photos are free to use, but both licences forbid compiling their photos into a similar or competing service; export flags them when you release a dataset openly.</p>
+<h2 id="open-collections">Open collections</h2>
+<h3 id="fx-sources-inaturalist-taxon-limit-none-licenses-cc0-cc-by-cc-by-sa-size-large-quality-research-label-false-place-id-none"><code>fx.sources.inaturalist(taxon, limit=None, licenses=("cc0", "cc-by", "cc-by-sa"), size="large", quality="research", label=False, place_id=None)</code></h3>
+<p>Research-grade iNaturalist observation photos for a taxon (scientific or common name), with each photo's own licence and attribution. <code>label=True</code> labels each image with its species (classification). Pages stop at 10,000 results.</p>
+<h3 id="fx-sources-gbif-scientific-name-none-query-none-limit-none-licenses-cc0-1-0-cc-by-4-0-country-none"><code>fx.sources.gbif(scientific_name=None, query=None, limit=None, licenses=("CC0_1_0", "CC_BY_4_0"), country=None)</code></h3>
+<p>Occurrence images from GBIF, with the publishing institution's licence and rights holder.</p>
+<h3 id="fx-sources-nasa-query-limit-none-size-large"><code>fx.sources.nasa(query, limit=None, size="large")</code></h3>
+<p>The NASA Image and Video Library. NASA imagery is generally not copyrighted in the US, but some items are third-party or show people and logos: check NASA's media guidelines.</p>
+<h3 id="fx-sources-artic-query-limit-none-fx-sources-smithsonian-query-limit-none-api-key-none"><code>fx.sources.artic(query, limit=None)</code> · <code>fx.sources.smithsonian(query, limit=None, api_key=None)</code></h3>
+<p>Public-domain (CC0) images from the Art Institute of Chicago (843 px IIIF images, as the museum asks) and the Smithsonian's Open Access.</p>
+<p>Not included, on purpose: <strong>Pixabay</strong> (its terms forbid automated collection and machine-learning use without permission), <strong>The Met</strong> and the <strong>Library of Congress</strong> (their servers only serve browsers: automated requests get a bot check, and Felix does not work around those).</p>
+<h2 id="dataset-hubs">Dataset hubs</h2>
+<h3 id="fx-sources-roboflow-project-version-workspace-none-api-key-none"><code>fx.sources.roboflow(project, version, workspace=None, api_key=None)</code></h3>
+<p>A Roboflow dataset version (your workspace or Universe: <code>project="workspace/project"</code>), downloaded as a COCO export and imported with boxes and splits. Cached in <code>~/.cache/felix/roboflow</code>. A Universe project without a licence means all rights reserved.</p>
+<h3 id="fx-sources-open-images-classes-split-validation-limit-none-seed-0-group-of-true"><code>fx.sources.open_images(classes, split="validation", limit=None, seed=0, group_of=True)</code></h3>
+<p>Open Images V7 images containing any of <code>classes</code> (display names: "Car", "Person", …), with all their boxes of those classes. The annotation CSVs are cached in <code>~/.cache/felix/open_images</code> (validation ~40 MB, test ~120 MB, train several GB). Each image keeps its own licence, author and Flickr page; annotations are CC BY 4.0 (Google). Images that Open Images lists as rotated are skipped, as their boxes may not line up.</p>
+<h3 id="fx-sources-coco-split-val2017-limit-none"><code>fx.sources.coco(split="val2017", limit=None)</code></h3>
+<p>COCO 2017 from the official files (val2017: 5k images, ~1 GB with annotations; train2017: 118k images, ~18 GB), cached in <code>~/.cache/felix/coco</code>. With a class file only images containing those classes are kept. Each image keeps its Flickr licence from COCO's metadata.</p>
+<h3 id="fx-sources-huggingface-dataset-split-train-config-none-limit-none-label-column-none-bbox-format-xywh-token-none"><code>fx.sources.huggingface(dataset, split="train", config=None, limit=None, label_column=None, bbox_format="xywh", token=None)</code></h3>
+<p>A Hugging Face image dataset through the Dataset Viewer API (only the rows you take are downloaded). A class-label column becomes the image label; an <code>objects</code> column with <code>bbox</code> and <code>category</code> gives boxes. The dataset card's licence is recorded.</p>
+<h3 id="fx-sources-kaggle-dataset-labels-none"><code>fx.sources.kaggle(dataset, labels=None)</code></h3>
+<p>A Kaggle dataset (<code>"owner/name"</code>), downloaded and imported like <code>local</code> (format detected automatically).</p>
+<h3 id="fx-sources-mapillary-bbox-limit-none-access-token-none"><code>fx.sources.mapillary(bbox, limit=None, access_token=None)</code></h3>
+<p>Street-level images inside a map area smaller than 0.01° on each side (Mapillary's limit), CC BY-SA 4.0.</p>
+<h2 id="your-own-source">Your own source</h2>
+<p>Subclass <code>fx.sources.Source</code> with <code>collect(self, collector, progress)</code> and call <code>collector.add(path=... or data=..., name=..., source={...}, objects=None, label=None)</code> for each image.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

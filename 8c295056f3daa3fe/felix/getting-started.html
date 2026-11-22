@@ -16,28 +16,40 @@ table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflo
 th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
-</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html" class="on">Getting started</a><a href="api.html">API</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="getting-started">Getting started</h1>
-<p>A Felix pipeline has five parts: <strong>class sets → step → random → paint/transformation → gen/make</strong>.</p>
-<h2 id="1-class-sets">1. Class sets</h2>
-<pre><code>with fx.class_set("animals"):
-    cat  = fx.toolkit.circle(radius=30, position=(32, 32))
-    dog  = fx.toolkit.rectangle(width=50, height=40)
-    bird = fx.toolkit.polygon(vertices=[(0, 30), (20, 0), (40, 30)])
-with fx.class_set("vehicles"):
-    bicycle = fx.toolkit.image(source="assets/bicycle.png")</code></pre>
-<p>Every shape created inside a <code>class_set</code> becomes a <strong>class</strong>. Its name is the variable name (<code>cat</code>, <code>dog</code>, ...), or pass <code>name="..."</code>. Class ids are assigned in definition order. Colours default to a built-in palette; override with <code>color="#ff8800"</code>. A shape's <code>position</code> is its default location if <code>fx.paint</code> is not given one.</p>
-<h2 id="2-step">2. Step</h2>
-<pre><code>with fx.step(size=(640, 640)):
-    ...</code></pre>
-<p><strong>The body runs once</strong> to record a recipe. Calls to <code>fx.random.*</code> don't produce numbers right away - they're *lazy* and are re-sampled for every generated image. This means:</p>
-<ul><li>plain Python <code>if</code>/<code>for</code> on a random value will not work (it isn't a number yet);</li><li>loops that *build* the scene do work: <code>for _ in range(5): fx.paint(...)</code> paints five objects, each with its own independent random draws;</li><li>the same random node used twice in one image gives the same value both times (e.g. <code>selected_set</code> feeding <code>class_</code>).</li></ul>
-<h2 id="3-random-threshold">3. Random + threshold</h2>
-<p><code>fx.random.class_set()</code>, <code>fx.random.class_(set)</code>, <code>uniform</code>, <code>integer</code>, <code>choice</code>, <code>position</code>, <code>color</code>. All accept <code>threshold=p</code> (0-1): the probability the value is produced at all. On a failed roll the value is <code>None</code>: painting <code>None</code> does nothing and a <code>None</code> transformation parameter is ignored. So <code>fx.paint(fx.random.class_(threshold=0.5))</code> adds an object to about half the images.</p>
-<h2 id="4-paint-and-transformation">4. Paint and transformation</h2>
-<p><code>fx.paint(cls, position=...)</code> places a class and returns a handle. <code>fx.toolkit.transformation(handle, hue=, brightness=, rotation=, scale=, opacity=)</code> modifies it. Transformations are applied to the handle's object when the image is rendered, so you can call them after <code>paint</code>.</p>
-<h2 id="5-gen-and-make">5. gen and make</h2>
-<p><code>fx.gen()</code> takes every object painted <strong>before</strong> it, measures each one's tight bounding box (pixels that are fully transparent don't count - ideal for PNG cut-outs) and records the annotations. Objects painted after <code>gen</code> are still drawn but are not annotated (handy for distractors). Objects annotated by <code>gen</code> are frozen: later transformations on them are ignored, so image and annotation always agree. The image itself is saved when the step ends.</p>
-<p><code>fx.make(pairs=10_000, output="./dataset")</code> repeats the step and writes the dataset. Pass a path ending in <code>.felix</code> for a single compressed file. <code>seed=</code> makes runs reproducible; the seed used is stored in <code>metadata.yml</code>.</p>
-<p>Note: an object partly covered by a later object keeps its full box (occlusion is not subtracted); an object fully off-canvas is skipped and reported.</p>
-<h2 id="rendering-backend">Rendering backend</h2>
-<p>Felix draws everything itself with NumPy: shapes are rasterised with 4×4 supersampling for smooth edges; scaling uses an anti-aliased triangle filter; rotation is bilinear and grows the sprite so nothing is clipped; hue shifts work in HSV; layers are composited with premultiplied alpha; images are written as PNG by Felix's own encoder. Bounding boxes come from the sprite's alpha channel (pixels above 16/255), so transparent padding in image sprites never inflates a box. About 75 images/s at 640×640 on a laptop CPU.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html" class="on">Getting started</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="getting-started">Getting started</h1>
+<p>A Felix script is five kinds of lines, run top to bottom: <strong>classes → acquire → transform → annotate → export</strong>. Nothing happens until <code>fx.export</code>: the earlier lines describe the dataset, export builds it.</p>
+<h2 id="1-classes">1. Classes</h2>
+<pre><code># classes.yml
+classes:
+  - name: leaf
+    prompt: a green plant leaf           # what an open-vocabulary model (fx.models.yoloe) looks for
+    aliases: [Leaf, leaves]              # names that mean "leaf" in datasets you import or in a model's labels
+  - name: flower
+confidence: 0.3                          # minimum model confidence (optional; per class too)</code></pre>
+<pre><code>import felix as fx
+
+fx.load_class("./classes.yml")</code></pre>
+<p>Imported boxes and model detections are mapped onto these classes; anything else is left out. Without a class file, every class is kept and models detect everything they know.</p>
+<h2 id="2-acquire">2. Acquire</h2>
+<pre><code>fx.acquire([
+    fx.sources.local("./raw/leaves"),                       # a folder of photos, as it is
+    fx.sources.video("./greenhouse.mp4", sampling=fx.sampling.auto()),
+    fx.sources.wikimedia(query="plant leaves", limit=500),
+])</code></pre>
+<p>Any mix of <a href="sources.html">sources</a>. Local folders need no preparation; existing datasets (COCO, YOLO, Felix) bring their labels and splits along. Online sources download politely (one request at a time per provider, as their rules ask) and keep each image's licence, author and page.</p>
+<h2 id="3-transform">3. Transform</h2>
+<pre><code>fx.transform.center_crop(size=640)       # or letterbox(size=640), dedupe(), blur_faces(), …</code></pre>
+<p>Steps run in the order written. Boxes and masks move with the pixels.</p>
+<h2 id="4-annotate">4. Annotate</h2>
+<pre><code>import workflow as wf
+
+fx.annotate(model=wf.load("./models/leaf-detector.nbm"))   # your own model
+# fx.annotate(model=fx.models.yolo26n)                     # or a built-in one</code></pre>
+<p>Only images without labels are annotated (<code>replace=True</code> to redo all). An image the model fails on is marked failed and left out of the dataset, not saved as "no objects".</p>
+<h2 id="5-export">5. Export</h2>
+<pre><code>fx.export("./datasets/leaves.felix")                       # until the sources run out
+fx.export("./datasets/leaves.felix", pairs=2000)           # exactly 2,000 image/annotation pairs
+fx.export("./datasets/leaves", license="CC-BY-4.0")        # a folder, released openly
+fx.export("./datasets/leaves.sh_felix")                    # a folder of shards, for very large datasets</code></pre>
+<p>The dataset comes with LICENSE.txt, ATTRIBUTIONS.md (every image's licence and credit) and CITATION.cff. Workflow trains from it directly: <code>model.train("./datasets/leaves.felix")</code>.</p>
+<p>To start a new dataset in the same program, call <code>fx.reset()</code>.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

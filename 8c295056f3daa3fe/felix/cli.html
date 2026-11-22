@@ -16,16 +16,17 @@ table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflo
 th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
-</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="api.html">API</a><a href="cli.html" class="on">CLI</a><a href="formats.html">Formats</a></nav><h1 id="cli">CLI</h1>
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html" class="on">CLI</a><a href="formats.html">Formats</a></nav><h1 id="cli">CLI</h1>
 <p><code>felix</code> (or <code>python -m felix</code>). Output is a minimal monochrome ("noir") panel built on rich, redrawn in place on a terminal (colour unless <code>NO_COLOR</code> is set); piped or on CI it prints just the final frame.</p>
-<pre><code>felix run SCRIPT [args...]            run a pipeline script
+<pre><code>felix run SCRIPT [args...]            run a Felix script (load_class, acquire, transform, annotate, export)
 felix pack FOLDER [-o OUT.felix]      folder -&gt; single compressed .felix
 felix unpack FILE.felix [-o FOLDER]   .felix -&gt; folder
 felix info PATH                       summary + per-class box counts (or images per class and split for class folders)
 felix partition SRC (--parts N | ...)  split a dataset into several smaller datasets
+felix shard SRC [--size N|--shards N]  a folder of .sh_felix shards, for very large datasets
 felix split SRC 0.5 [-o OUT]          a smaller copy (here half) for quick experiments; SRC is unchanged
                                       (classification: every class keeps its share in every split)
-felix convert coco SRC -o OUT         Roboflow/COCO -&gt; Felix
+felix convert SRC [-o OUT]            any dataset or image folder (COCO, YOLO, class folders, images) -&gt; Felix
 felix library [SEARCH]                browse every function and command; type to search
 felix --version</code></pre>
 <p>All writing commands refuse to overwrite existing output unless <code>--overwrite</code> is given.</p>
@@ -53,8 +54,16 @@ felix split voc.felix --size 1000         # → voc_split_1000.felix, exactly 10
 felix split ./data 0.25 -o small          # a folder dataset → folder copy "small"</code></pre>
 <p>The copy is a complete dataset like any other. Every train / val / test split keeps the same share (half of train, half of val, half of test), and every pair stays in the split it was in, so test pictures never become training pictures. Which pairs are picked is random but repeatable: the same <code>--seed</code> (default 0) gives the same subset. A split that had pairs keeps at least one. <code>metadata.yml</code> records where it came from (<code>split_from: {source, pairs, seed, fraction}</code>).</p>
 <table><thead><tr><th>Option</th><th>Meaning</th></tr></thead><tbody><tr><td><code>fraction</code></td><td>share to keep, above 0 and at most 1 (<code>0.5</code> = half; <code>50</code> is refused with a hint)</td></tr><tr><td><code>--size N</code></td><td>keep N pairs instead of a fraction</td></tr><tr><td><code>-o OUT</code></td><td>output path (default <code>&lt;name&gt;_split_&lt;percent&gt;.felix</code>, or a folder for a folder source)</td></tr><tr><td><code>--seed S</code></td><td>which random subset</td></tr><tr><td><code>--overwrite</code></td><td>replace an existing output (never the source)</td></tr></tbody></table>
-<h2 id="converting-a-roboflow-coco-export">Converting a Roboflow COCO export</h2>
-<p>Export from Roboflow in <strong>COCO</strong> format, then:</p>
-<pre><code>felix convert coco ./my-export       -o ./my-felix-dataset
-felix convert coco ./my-export.zip   -o ./my-dataset.felix</code></pre>
-<ul><li><code>SRC</code> is the export folder or its <code>.zip</code>. Every <code>_annotations.coco.json</code> found (usually <code>train/</code>, <code>valid/</code>, <code>test/</code>) is converted; the split is stored per annotation (<code>split: train</code>).</li><li>Images are copied untouched as <code>IMG&lt;n&gt;.&lt;original ext&gt;</code> (fast, no size growth). Add <code>--png</code> to re-encode everything to PNG instead - note JPEG→PNG makes files roughly 8-10x larger.</li><li>Roboflow's placeholder parent category is dropped; each category's <code>supercategory</code> becomes its class set (<code>default</code> if none). Class ids are renumbered from 0.</li><li>Boxes stay <code>xywh</code> pixels. Missing image files are skipped and reported.</li></ul></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>
+<h2 id="shards-for-very-large-datasets-felix-shard">Shards for very large datasets: <code>felix shard</code></h2>
+<pre><code>felix shard voc.felix                    # → voc_shards/ with 1000 pairs per shard
+felix shard voc.felix --size 5000        # 5000 pairs per shard
+felix shard ./imagenet --shards 256 -o imagenet_shards
+felix pack voc_shards -o voc.felix       # back to one file</code></pre>
+<p>Every shard is a complete <code>.sh_felix</code> file; the folder loads as one dataset (<code>fx.load("voc_shards")</code>), with the same pairs and splits as the source, which stays unchanged. Workflow trains from it one shard at a time. <code>felix info</code>, <code>split</code> and <code>partition</code> work on shard folders too.</p>
+<h2 id="converting-a-dataset-felix-convert">Converting a dataset: <code>felix convert</code></h2>
+<pre><code>felix convert ./roboflow-export                    # COCO export (folder or .zip) → roboflow-export.felix
+felix convert ./yolo-dataset -o data.felix         # YOLO (data.yaml + images/ + labels/)
+felix convert ./animals --labels folders           # class folders → a classification dataset
+felix convert ./photos -o photos.sh_felix          # plain images (no labels yet), as shards
+felix convert ./export.zip --license CC-BY-4.0     # released openly, with licence files</code></pre>
+<p>The same as <code>fx.acquire([fx.sources.local(SRC)])</code> followed by <code>fx.export(OUT)</code>: labels and splits come along, the files are copied as they are, and LICENSE.txt, ATTRIBUTIONS.md and CITATION.cff are written.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

@@ -20,6 +20,7 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
 <p><code>workflow</code> (or <code>python -m workflow</code>), in the same minimal style as Felix.</p>
 <pre><code>workflow init [NOTEBOOK.ipynb] [--dataset D]    starter notebook: small model, benchmarks before/after, saving
 workflow info MODEL.nbm                        classes, precision, training progress, layer summary
+workflow labels MODEL.nbm [--json]             what the model detects: class ids and names
 workflow predict &lt;model_path&gt; &lt;image_path&gt;      detect objects; original/, annotated/, predictions.json → results/
 workflow eval MODEL.nbm [--dataset D --split test]   size/FLOPs/FPS, plus accuracy with a dataset
 workflow quantize MODEL.nbm int8|fp16|fp32 [--calibration D] [-o OUT]   post-training quantisation
@@ -53,4 +54,8 @@ workflow init detector.ipynb --dataset data.felix --img-size 320 --epochs 50 --d
 <p>It also writes <strong><code>library.md</code></strong> next to the notebook: one table of every layer, block, composition tool and model tool, with what it builds inside and what you choose (<a href="library.html">Library</a>). An existing <code>library.md</code> is kept unless you pass <code>--overwrite</code>.</p>
 <h2 id="inference-scripts">Inference scripts</h2>
 <table><thead><tr><th>Preset</th><th>Does</th><th>Run</th></tr></thead><tbody><tr><td><code>image</code></td><td>one or more images → <code>results/</code></td><td><code>python infer_image.py photo.jpg</code></td></tr><tr><td><code>folder</code></td><td>every image in a folder → <code>results/</code></td><td><code>python infer_folder.py photos/</code></td></tr><tr><td><code>video</code></td><td>a video with live preview, optional <code>--save out.mp4</code></td><td><code>python infer_video.py clip.mp4</code></td></tr><tr><td><code>webcam</code></td><td>live camera detection (<code>--mirror</code> for selfie view)</td><td><code>python infer_webcam.py</code></td></tr></tbody></table>
-<p>All take <code>--confidence</code>, <code>--iou</code>, <code>--img-size</code> and <code>--device</code>. <code>video</code> and <code>webcam</code> need <code>opencv-python</code>.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>
+<p>All take <code>--confidence</code>, <code>--iou</code>, <code>--img-size</code> and <code>--device</code>. <code>video</code> and <code>webcam</code> need <code>opencv-python</code>.</p>
+<h2 id="what-a-model-detects-workflow-labels">What a model detects: <code>workflow labels</code></h2>
+<pre><code>workflow labels detector.nbm             # a table of class ids and names
+workflow labels detector.nbm --json      # {"model", "task", "labels": [...]} for scripts</code></pre>
+<p>It reads only the file's metadata (no weights are loaded), so it is instant even for large models. In Python: <code>model.labels()</code> for a loaded model, or <code>wf.labels("detector.nbm")</code> straight from a file.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

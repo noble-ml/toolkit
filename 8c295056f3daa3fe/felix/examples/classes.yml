@@ -1,0 +1,6 @@
+# Target classes for the leaf examples. Names and aliases are matched without case.
+classes:
+  - name: leaf
+    prompt: a green plant leaf        # for open-vocabulary models such as fx.models.yoloe
+    aliases: [leaves, Leaf]           # what the class may be called in imported datasets or model labels
+confidence: 0.3

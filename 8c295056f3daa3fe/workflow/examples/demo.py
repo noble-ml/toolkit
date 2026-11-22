@@ -22,22 +22,9 @@ os.makedirs(args.out, exist_ok=True)
 SIZE = 256
 
 
-# 1. data: a Felix pipeline draws circles, squares and triangles -------------------------------------
+# 1. data: circles, squares and triangles with their boxes (drawn with Pillow, stored through Felix) ------------
 def make_dataset(path):
-    fx.reset()
-    with fx.class_set("shapes"):
-        circle = fx.toolkit.circle(radius=20, color="#d62728")
-        square = fx.toolkit.rectangle(width=38, height=38, color="#1f77b4")
-        triangle = fx.toolkit.polygon(vertices=[(0, 40), (22, 0), (44, 40)], color="#2ca02c")
-    with fx.step(size=(SIZE, SIZE)):
-        fx.canvas.background("#e8e8e8")
-        for threshold in (1.0, 0.7, 0.4):                         # 1 to 3 objects per image
-            obj = fx.paint(fx.random.class_(threshold=threshold), position=fx.random.position(margin=40))
-            fx.toolkit.transformation(obj, scale=fx.random.uniform(0.7, 1.5), rotation=fx.random.uniform(0, 360),
-                                      hue=fx.random.uniform(-12, 12), brightness=fx.random.uniform(0.85, 1.15))
-        fx.gen()                                                   # annotate the objects above...
-        fx.paint(fx.toolkit.circle(radius=8, color="#999999"), position=fx.random.position())   # ...not this one
-    fx.make(pairs=args.pairs, output=path, seed=7, overwrite=True)
+    wf.practice_dataset(path, pairs=args.pairs, img_size=SIZE, seed=7, max_objects=3, overwrite=True)
 
 
 data_path = os.path.join(args.out, f"shapes_{args.pairs}.felix")

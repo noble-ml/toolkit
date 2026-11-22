@@ -16,27 +16,28 @@ table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflo
 th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
-</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html" class="on">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="api.html">API</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="felix">Felix</h1>
-<p>A lightweight dataset pipeline generator for object detection. Describe classes and a generation step in a few lines of Python; Felix renders images, tight bounding boxes and metadata. It also reads ImageNet-style classification folders (one folder per class) as datasets, as they are. Felix renders with its own NumPy backend (shapes, transforms, compositing, PNG) and needs only NumPy and rich; Pillow is optional, for JPEG files. Works on Linux, macOS and Windows (Python 3.8+).</p>
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html" class="on">Overview</a><a href="install.html">Install</a><a href="getting-started.html">Getting started</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="felix">Felix</h1>
+<p>A Python toolkit for building computer-vision datasets from real images: collect them from your files, videos, cameras and online collections, transform them, label them with a model, and export one clean dataset, with every image's source and licence recorded and the licence and citation files written for you.</p>
 <pre><code>import felix as fx
+import workflow as wf
 
-with fx.class_set("animals"):
-    cat = fx.toolkit.circle(radius=30)
-    dog = fx.toolkit.rectangle(width=50, height=40)
+fx.load_class("./classes.yml")
 
-with fx.step(size=(640, 640)):
-    fx.canvas.background("#eeeeee")
-    obj = fx.paint(fx.random.class_(), position=fx.random.position(margin=40))
-    fx.toolkit.transformation(obj, rotation=fx.random.uniform(0, 360))
-    fx.gen()
+fx.acquire([
+    fx.sources.local("./raw/leaves"),
+    fx.sources.urls("./leaf_urls.txt"),
+    fx.sources.video("./greenhouse.mp4", sampling=fx.sampling.auto()),
+    fx.sources.wikimedia(query="plant leaves", limit=1000),
+])
 
-fx.make(pairs=10_000, output="./dataset")        # folder
-# fx.make(pairs=10_000, output="./dataset.felix")  # one compiled file</code></pre>
-<p>Try the full example: <a href="examples/animals.py">animals.py</a> (<code>python examples/animals.py</code> or <code>felix run examples/animals.py</code>).</p>
-<h2 id="install">Install</h2>
-<p>See <a href="install.html">Install</a>. Short version:</p>
-<pre><code>pip install numpy rich
-pip install --no-deps --no-index --find-links <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/simple/felix/ felix</code></pre>
-<p>(<code>--no-index</code> stops pip from fetching the unrelated public <code>felix</code> from PyPI.)</p>
+fx.transform.center_crop(size=640)
+
+model = wf.load("./models/leaf-detector.nbm")
+fx.annotate(model=model)
+
+fx.export("./datasets/leaf-center.felix")</code></pre>
+<p>No pipeline objects, no <code>run()</code>: each line adds a step, and <code>fx.export</code> runs them in order. Images stream through, so <code>fx.export(..., pairs=5000)</code> stops after 5,000 pairs; without <code>pairs</code> it keeps going until the sources run out or you stop it (Ctrl+C), and the dataset written so far is closed properly.</p>
+<h2 id="what-is-in-it">What is in it</h2>
+<ul><li><strong>Sources</strong> (<code>fx.sources</code>), 20 of them: your files (folders, single images, archives, existing COCO / YOLO / Felix datasets), video files, cameras and streams, web URLs, Wikimedia Commons, Openverse, Flickr, Unsplash, Pexels, iNaturalist, GBIF, NASA, the Art Institute of Chicago, the Smithsonian, Roboflow, Open Images, COCO 2017, Hugging Face, Kaggle and Mapillary. Each uses its provider's real API and keeps what the provider says about licence and attribution.</li><li><strong>Video sampling</strong> (<code>fx.sampling</code>): <code>auto()</code> (only when the scene changes), <code>interval(seconds=)</code>, <code>random(count=)</code>.</li><li><strong>Transforms</strong> (<code>fx.transform</code>): <code>center_crop</code>, <code>letterbox</code>, <code>consequential</code> (object-focused crops plus negative samples), <code>dedupe</code>, <code>map_classes</code>, <code>filter_classes</code>, <code>filter_images</code>, <code>blur_faces</code>, and <code>custom</code> for your own. Boxes and masks move with the pixels.</li><li><strong>Annotation</strong> (<code>fx.annotate</code>): with your own Workflow model, or the built-in <code>fx.models.yolo26n</code>, <code>fx.models.yoloe</code> (open vocabulary, prompted from classes.yml; both bundled, so they work offline) and <code>fx.models.sam</code> (masks for boxes). Images the model fails on are never mistaken for images without objects.</li><li><strong>Export</strong> (<code>fx.export</code>): a <code>.felix</code> file, a folder, or a folder of <code>.sh_felix</code> shards, with LICENSE.txt, ATTRIBUTIONS.md and CITATION.cff, for an open (<code>license="CC-BY-4.0"</code> or <code>"auto"</code>) or closed dataset.</li><li><strong>Dataset files</strong>: <code>fx.load</code> (what Workflow trains from), <code>fx.split</code>, <code>fx.partition</code>, <code>fx.shard</code>, and the <code>felix</code> command (<code>info</code>, <code>pack</code>, <code>convert</code>, <code>library</code>, …).</li></ul>
 <h2 id="docs">Docs</h2>
-<ul><li><a href="docs.md">docs.md</a>: everything below in a single file</li><li><a href="getting-started.html">Getting started</a> - the mental model, step by step</li><li><a href="api.html">API reference</a> - every function and parameter</li><li><a href="cli.html">CLI</a> - <code>felix run | pack | unpack | info | convert coco</code></li><li><a href="formats.html">Dataset formats</a> - folder layout, <code>.felix</code>, annotation schema</li><li><a href="install.html">Install</a> - installing the package</li></ul></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>
+<ul><li><a href="install.html">Install</a> · <a href="getting-started.html">Getting started</a> · <a href="sources.html">Sources</a></li><li><a href="api.html">API</a> · <a href="licensing.html">Licences and provenance</a> · <a href="formats.html">Formats</a> · <a href="cli.html">CLI</a></li><li>Examples: <a href="examples/leaf_center.py">leaf, center crop</a> · <a href="examples/leaf_consequential.py">leaf, consequential</a> · <a href="examples/general_letterbox.py">general objects, letterbox</a> · <a href="examples/classes.yml">classes.yml</a></li></ul></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

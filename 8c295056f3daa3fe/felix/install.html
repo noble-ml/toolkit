@@ -16,19 +16,20 @@ table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflo
 th,td{border-bottom:1px solid var(--line);padding:.5rem .8rem .5rem 0;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
-</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html" class="on">Install</a><a href="getting-started.html">Getting started</a><a href="api.html">API</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="install">Install</h1>
-<h2 id="colab-notebooks-direct-link">Colab / notebooks (direct link)</h2>
-<pre><code>!pip install <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/files/felix-0.5.0-py3-none-any.whl</code></pre>
-<p>A direct wheel URL needs no extra flags: pip fetches NumPy and rich from PyPI itself, and there is no name clash because it never searches an index for <code>felix</code>. Replace the version in the file name for other releases (all wheels stay on the site).</p>
-<h2 id="anywhere-else-index">Anywhere else (index)</h2>
-<pre><code>pip install numpy rich
+</style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html" class="on">felix</a><a href="../workflow/index.html">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html" class="on">Install</a><a href="getting-started.html">Getting started</a><a href="sources.html">Sources</a><a href="api.html">API</a><a href="licensing.html">Licences</a><a href="cli.html">CLI</a><a href="formats.html">Formats</a></nav><h1 id="install">Install</h1>
+<h2 id="anywhere-index">Anywhere (index)</h2>
+<pre><code>pip install Pillow rich
 pip install --no-deps --no-index --find-links <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/simple/felix/ felix</code></pre>
-<p>That's it. Works the same on Linux, macOS and Windows (Python 3.8+). Check with <code>felix --version</code>.</p>
+<p>Works on Linux, macOS and Windows (Python 3.8+). Check with <code>felix --version</code>.</p>
 <p>Why the extra flags:</p>
-<ul><li><strong><code>--no-index</code></strong>: pip must not search PyPI. A *different, public* package called <code>felix</code> lives there and would be installed instead of this one. Never use <code>--extra-index-url</code> for Felix.</li><li><strong><code>--no-deps</code></strong> and the separate <code>pip install numpy rich</code>: with <code>--no-index</code> pip can't fetch dependencies from this page, so install them first the normal way.</li></ul>
-<p>Upgrade to the newest version by adding <code>--upgrade</code>; pin one with <code>felix==0.5.0</code>.</p>
-<p>Try the example pipeline: download <a href="examples/animals.py">animals.py</a> and <a href="examples/assets/bicycle.png">bicycle.png</a> (keep it in an <code>assets/</code> folder next to the script), then run <code>python animals.py</code>.</p>
-<h2 id="jpeg">JPEG</h2>
-<p>Felix reads and writes PNG on its own. Reading JPEG (for example Roboflow exports with <code>.jpg</code> images, or JPEG sprites and backgrounds) needs Pillow: <code>pip install Pillow</code>. Without it Felix explains what is missing.</p>
-<h2 id="notes">Notes</h2>
-<p>Felix is proprietary software. This page is unlisted but not access-controlled: anyone with the link can download the package, and the package is plain Python.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>
+<ul><li><strong><code>--no-index</code></strong>: pip must not search PyPI. A *different, public* package called <code>felix</code> lives there and would be installed instead of this one. Never use <code>--extra-index-url</code> for Felix.</li><li><strong><code>--no-deps</code></strong> and the separate <code>pip install Pillow rich</code>: with <code>--no-index</code> pip can't fetch dependencies from this page, so install them first the normal way.</li></ul>
+<p>Upgrade by adding <code>--upgrade --no-cache-dir</code>; pin a version with <code>felix==1.1.0</code>.</p>
+<h2 id="colab-notebooks-direct-link">Colab / notebooks (direct link)</h2>
+<pre><code>!pip install <span class="base" data-up="1">https://YOUR-USER.github.io/YOUR-REPO/8c295056f3daa3fe</span>/files/felix-1.1.0-py3-none-any.whl</code></pre>
+<h2 id="optional-parts">Optional parts</h2>
+<table><thead><tr><th>For</th><th>Install</th></tr></thead><tbody><tr><td>video files, cameras, streams, face blurring</td><td><code>pip install opencv-python</code></td></tr><tr><td>built-in annotation models (<code>fx.models.yolo26n</code>, <code>yoloe</code>, <code>sam</code>)</td><td><code>pip install ultralytics</code> (pulls in PyTorch; AGPL-3.0 licensed). YOLO26n and YOLOE-26s weights ship inside Felix; others download once</td></tr><tr><td>your own trained models</td><td>Workflow (<code>wf.load("model.nbm")</code>), same site</td></tr></tbody></table>
+<p>Without them Felix says what is missing when you use the feature.</p>
+<h2 id="credentials-and-contact">Credentials and contact</h2>
+<p>Online sources that need keys read them from the call, environment variables or <code>~/.config/felix/credentials.yml</code> (see <a href="sources.html#credentials">Sources</a>). Set <code>FELIX_CONTACT</code> to an email or URL so providers can reach you, as Wikimedia's policy asks.</p>
+<h2 id="caches">Caches</h2>
+<p>Large downloads (Open Images CSVs, COCO, Roboflow exports, model weights) are cached in <code>~/.cache/felix</code> (<code>FELIX_CACHE</code> to move it). Working copies made during an export live in a temporary folder that is removed afterwards.</p></main><script>document.querySelectorAll(".base").forEach(function(e){var p=location.pathname.replace(/[^\/]*$/,"");if(e.dataset.up==="1")p=p.replace(/[^\/]+\/$/,"");e.textContent=location.origin+p.replace(/\/$/,"")})</script></body></html>

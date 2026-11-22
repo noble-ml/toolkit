@@ -18,113 +18,85 @@ th{color:var(--dim);font-weight:400}ul,ol{padding-left:1.3rem}li{margin:.3rem 0}
 img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0}
 </style></head><body><main><nav><a href="../index.html"><b>noble</b></a><a href="../felix/index.html">felix</a><a href="../workflow/index.html" class="on">workflow</a><span class="sep">|</span><a href="index.html">Overview</a><a href="install.html">Install</a><a href="demo.html">Demo</a><a href="cookbook.html" class="on">Cookbook</a><a href="library.html">Library</a><a href="getting-started.html">Getting started</a><a href="layers.html">Layers</a><a href="blocks.html">Blocks</a><a href="composition.html">Composition</a><a href="model.html">Model</a><a href="detection.html">Detection</a><a href="classification.html">Classification</a><a href="training.html">Training</a><a href="evaluation.html">Evaluation</a><a href="quantization.html">Quantisation</a><a href="devices.html">Devices</a><a href="errors.html">Errors</a><a href="cli.html">CLI</a><a href="changes.html">Changes</a></nav><h1 id="cookbook">Cookbook</h1>
 <p>Every tool, explained like you're three, then *why* you'd reach for it and where it goes. Every example writes out all the main arguments (with their defaults) so you can see every knob, even the ones you'd usually leave alone.</p>
-<p>Felix makes the pictures. Workflow is the brain that learns to find things in them.</p>
+<p>Felix collects and labels the pictures. Workflow is the brain that learns to find things in them.</p>
 <p>How to read an entry:</p>
 <ul><li><strong>Toddler words</strong>: what it is.</li><li><strong>Why you'd use it</strong>: the reasoning, and where it usually sits.</li><li><strong>Example</strong>: every main argument shown.</li><li><strong>Watch out</strong>: the one mistake people make (when there is one).</li></ul>
 <p>---</p>
-<h2 id="part-1-felix-making-the-pictures">Part 1 · Felix: making the pictures</h2>
-<h3 id="fx-class-set"><code>fx.class_set</code></h3>
-<p><strong>Toddler words:</strong> a toy box with a name. Every toy you make inside it is a *kind of thing* the brain must learn to find.</p>
-<p><strong>Why you'd use it:</strong> the brain can only learn classes you define, and the boxes let you group them (animals, vehicles) so you can later pick "any animal" or "any vehicle" at random. The class name comes from the variable name, so <code>cat = ...</code> makes a class called <code>cat</code>.</p>
-<pre><code>with fx.class_set("animals"):
-    cat = fx.toolkit.circle(radius=30)              # class "cat"
-    dog = fx.toolkit.rectangle(width=50, height=40) # class "dog"</code></pre>
-<p><strong>Watch out:</strong> shapes made *outside* a class set are not classes: they get drawn but never labelled. That's how you make decoys on purpose.</p>
-<h3 id="fx-toolkit-circle-rectangle-polygon"><code>fx.toolkit.circle</code>, <code>rectangle</code>, <code>polygon</code></h3>
-<p><strong>Toddler words:</strong> a ball, a box, and a "connect the dots" shape.</p>
-<p><strong>Why you'd use it:</strong> quick synthetic objects for testing a pipeline, or for detecting simple things (signs, markers, parts). <code>position</code> is only a default spot; usually <code>fx.paint</code> decides where it goes.</p>
-<pre><code>ball = fx.toolkit.circle(radius=20, position=None, color="red", name=None)
-box  = fx.toolkit.rectangle(width=40, height=30, position=None, color="#1f77b4", name=None)
-tent = fx.toolkit.polygon(vertices=[(0, 40), (20, 0), (40, 40)], position=None, color="green", name=None)</code></pre>
-<p><strong>Watch out:</strong> without <code>color</code>, each class gets its own colour from a palette. Set it when the colour matters.</p>
-<h3 id="fx-stack"><code>fx.stack</code></h3>
-<p><strong>Toddler words:</strong> glue several shapes together into one toy. A big circle, two triangle ears and two dot eyes make one cat, and the brain learns "cat", not "circle" and "triangle".</p>
-<p><strong>Why you'd use it:</strong> real objects are made of parts. A stack lets you build a recognisable object from simple shapes and still get <strong>one</strong> class and <strong>one</strong> box around the whole thing. The class name is the variable name. Each part's <code>position</code> says where its centre goes, measured from the middle of the stack.</p>
-<pre><code>with fx.class_set("animals"):
-    cat = fx.stack(
-        fx.toolkit.polygon(vertices=[(0, 14), (7, 0), (14, 14)], position=(-13, -22), color=None),  # left ear
-        fx.toolkit.polygon(vertices=[(0, 14), (7, 0), (14, 14)], position=(13, -22), color=None),   # right ear
-        fx.toolkit.circle(radius=22, position=(0, 0), color=None),                                  # head
-        fx.toolkit.circle(radius=3, position=(-8, -4), color="black"),                               # eyes
-        fx.toolkit.circle(radius=3, position=(8, -4), color="black"),
-        position=None, color="#e8a33d", name=None,
-    )</code></pre>
-<p><strong>Watch out:</strong> parts are drawn in order, so put the things that go *on top* (eyes, nose) last. Parts without a colour use the stack's colour; parts with one keep it. Spinning or growing the stack moves all its parts together.</p>
-<h3 id="fx-toolkit-image"><code>fx.toolkit.image</code></h3>
-<p><strong>Toddler words:</strong> use a real sticker as a toy. The see-through parts of the sticker don't count as the toy.</p>
-<p><strong>Why you'd use it:</strong> cut-out photos of real objects (PNG with transparency) look far more like real life than plain shapes. The box is fitted to the visible pixels only, so transparent padding never makes boxes too big.</p>
-<pre><code>bike = fx.toolkit.image(source="assets/bicycle.png", width=80, height=None, position=None, name=None)</code></pre>
-<p><strong>Watch out:</strong> give only <code>width</code> *or* <code>height</code> to keep the proportions; give both to stretch. JPEG stickers need Pillow, and have no see-through parts.</p>
-<h3 id="fx-step"><code>fx.step</code></h3>
-<p><strong>Toddler words:</strong> the recipe for one picture. Felix follows it again and again, rolling new dice each time.</p>
-<p><strong>Why you'd use it:</strong> everything you write inside it (background, painting, changes) happens once per image. Make several steps (for example "busy street" and "empty street") and Felix shares the images between them.</p>
-<pre><code>with fx.step(size=(640, 640), name=None):
-    ...</code></pre>
-<h3 id="fx-canvas-background"><code>fx.canvas.background</code></h3>
-<p><strong>Toddler words:</strong> the paper you draw on: one colour, or a photo.</p>
-<p><strong>Why you'd use it:</strong> a plain colour is easy to learn; real photos (a folder of them, one picked per image) teach the brain to ignore clutter, which is what you want for real-world use.</p>
-<pre><code>fx.canvas.background(color="#eeeeee", image=None)
-fx.canvas.background(color=None, image="backgrounds/")    # a different photo each time, cropped to fit</code></pre>
-<h3 id="fx-random"><code>fx.random.*</code></h3>
-<p><strong>Toddler words:</strong> dice. Every picture rolls them again.</p>
-<p><strong>Why you'd use it:</strong> variety. A brain that only ever sees a cat in the middle, upright and red will fail on anything else. Randomness in position, size, angle and colour is what makes it robust.</p>
-<pre><code>fx.random.uniform(0.5, 2.0, threshold=1.0)    # any number between 0.5 and 2
-fx.random.integer(1, 6, threshold=1.0)        # a whole number, like a real die
-fx.random.choice("red", "blue", threshold=1.0)
-fx.random.position(margin=40, threshold=1.0)  # somewhere on the paper, at least 40 px from the edges
-fx.random.color(threshold=1.0)
-fx.random.class_set("animals", threshold=1.0) # pick a toy box (any box if no names)
-fx.random.class_(None, threshold=1.0)         # pick a toy (from any box, or from the box you pass)</code></pre>
-<p><strong>Watch out:</strong> <code>threshold=0.5</code> means "flip a coin first; if it says no, skip it". It's how you get a *varying number* of objects. Each dice call is its own die: the same variable used twice gives the same roll within one picture.</p>
-<h3 id="fx-paint"><code>fx.paint</code></h3>
-<p><strong>Toddler words:</strong> put a toy on the paper.</p>
-<p><strong>Why you'd use it:</strong> this is what actually places objects. Pass a class, a random class, or a plain shape.</p>
-<pre><code>obj = fx.paint(fx.random.class_(None, threshold=1.0), position=fx.random.position(margin=40))</code></pre>
-<h3 id="fx-toolkit-transformation"><code>fx.toolkit.transformation</code></h3>
-<p><strong>Toddler words:</strong> change how the toy looks: spin it, grow it, recolour it, brighten it, fade it.</p>
-<p><strong>Why you'd use it:</strong> the same as dice: real objects come at all angles, sizes and lighting. Calls add up (two rotations add, two scales multiply).</p>
-<pre><code>fx.toolkit.transformation(obj, hue=fx.random.uniform(-20, 20), brightness=fx.random.uniform(0.8, 1.2),
-                          rotation=fx.random.uniform(0, 360), scale=fx.random.uniform(0.7, 1.5), opacity=1.0)</code></pre>
-<p><strong>Watch out:</strong> <code>hue</code> is in degrees around the colour wheel, <code>rotation</code> is in degrees counter-clockwise, and the others are multipliers (1 = unchanged).</p>
-<h3 id="fx-gen"><code>fx.gen</code></h3>
-<p><strong>Toddler words:</strong> take a photo of where every toy is (the answer key). Toys painted *after* the photo are in the picture but not in the answers.</p>
-<p><strong>Why you'd use it:</strong> it writes the boxes. Painting things after it adds <strong>decoys</strong> the brain must learn to ignore, which cuts false alarms.</p>
-<pre><code>fx.gen()
-fx.paint(fx.toolkit.circle(radius=8, color="gray"), position=fx.random.position(margin=0))   # a decoy</code></pre>
-<h3 id="fx-make"><code>fx.make</code></h3>
-<p><strong>Toddler words:</strong> do the recipe lots of times and put everything in a folder (or one <code>.felix</code> file).</p>
-<p><strong>Why you'd use it:</strong> this is the moment the dataset is created. Same <code>seed</code> = the exact same dataset, which is handy for comparing models fairly.</p>
-<pre><code>fx.make(pairs=1000, output="shapes.felix", seed=7, overwrite=False, quiet=False)</code></pre>
+<h2 id="part-1-felix-collecting-the-pictures">Part 1 · Felix: collecting the pictures</h2>
+<h3 id="fx-load-class"><code>fx.load_class</code></h3>
+<p><strong>Toddler words:</strong> the shopping list. Before going out, write down what you're looking for: "leaves". Felix only keeps boxes for things on the list.</p>
+<p><strong>Why you'd use it:</strong> it decides which classes the dataset has, what an open-vocabulary model is asked to find (<code>prompt</code>), and which names in other datasets or a model's labels mean the same thing (<code>aliases</code>).</p>
+<pre><code>fx.load_class("./classes.yml")</code></pre>
+<pre><code>classes:
+  - name: leaf
+    prompt: a green plant leaf
+    aliases: [leaves, Leaf]
+confidence: 0.3</code></pre>
+<p><strong>Watch out:</strong> without a class file, everything is kept: a COCO import brings all 80 classes, and a built-in model detects everything it knows.</p>
+<h3 id="fx-acquire-and-fx-sources"><code>fx.acquire</code> and <code>fx.sources.*</code></h3>
+<p><strong>Toddler words:</strong> the shopping trip. Point at the places pictures come from: your folder, a video, a website, a museum. Felix fetches them when the dataset is built.</p>
+<p><strong>Why you'd use it:</strong> real datasets mix sources. A folder of photos needs no preparation; COCO, YOLO and Felix datasets bring their boxes; online collections (Wikimedia, Openverse, iNaturalist, Open Images, Roboflow, …) bring each picture's licence and who to credit.</p>
+<pre><code>fx.acquire([
+    fx.sources.local("./raw/leaves", recursive=True, labels=None, license=None),
+    fx.sources.urls("./leaf_urls.txt", license=None),
+    fx.sources.wikimedia(query="plant leaves", limit=1000, licenses=None, max_side=2048),
+    fx.sources.open_images(classes=["Car", "Person"], split="validation", limit=None),
+], blur_faces=False)</code></pre>
+<p><strong>Watch out:</strong> "public on the internet" is not "free to use". URL lists have unknown licences; export reminds you.</p>
+<h3 id="fx-sources-video-and-fx-sampling"><code>fx.sources.video</code> and <code>fx.sampling</code></h3>
+<p><strong>Toddler words:</strong> a flip book. Felix keeps some pages, not all: when the picture changes (<code>auto</code>), every few seconds (<code>interval</code>), or a random handful (<code>random</code>).</p>
+<p><strong>Why you'd use it:</strong> a minute of video is 1,800 frames, nearly all the same. <code>auto</code> keeps one frame of a still scene and more when things move, so the dataset isn't 90% copies.</p>
+<pre><code>fx.sources.video("./greenhouse.mp4", sampling=fx.sampling.auto(threshold=0.04, min_gap=0.5))
+fx.sources.video("./street.mp4", sampling=fx.sampling.interval(seconds=2))
+fx.sources.video("./street.mp4", sampling=fx.sampling.random(count=1000, seed=42))
+fx.sources.camera(device=0, sampling=fx.sampling.interval(seconds=1), count=500)</code></pre>
+<h3 id="fx-transform-center-crop-letterbox"><code>fx.transform.center_crop</code>, <code>letterbox</code></h3>
+<p><strong>Toddler words:</strong> make every picture the same size. Center crop cuts the edges off; letterbox shrinks the whole picture and adds grey bars.</p>
+<p><strong>Why you'd use it:</strong> center crop shrinks big photos before annotating (faster, and the subject is usually in the middle); letterbox keeps every part of a scene, which suits general detectors. The boxes move with the pixels.</p>
+<pre><code>fx.transform.center_crop(size=640, min_visibility=0.3)
+fx.transform.letterbox(size=640, fill=(114, 114, 114))</code></pre>
+<h3 id="fx-transform-consequential"><code>fx.transform.consequential</code></h3>
+<p><strong>Toddler words:</strong> zoom in on each toy and take a photo of it, plus a few photos of empty floor so the brain learns what "nothing" looks like.</p>
+<p><strong>Why you'd use it:</strong> in a 4,000-pixel photo a leaf may be 40 pixels: resized to 640 for training it nearly vanishes. Crops around each object keep them big enough to learn, and <code>negative_rate</code> of the crops show no objects.</p>
+<pre><code>fx.annotate(model=model)                                   # first: it needs the boxes
+fx.transform.consequential(size=640, negative_rate=0.15, margin=0.25, min_visibility=0.3, overlap=0.6, seed=0)</code></pre>
+<p><strong>Watch out:</strong> it must come after <code>fx.annotate</code>, and nothing that changes geometry may follow it. Felix stops you if the order is wrong.</p>
+<h3 id="fx-annotate-and-fx-models"><code>fx.annotate</code> and <code>fx.models</code></h3>
+<p><strong>Toddler words:</strong> a helper who looks at every picture and draws the boxes for you.</p>
+<p><strong>Why you'd use it:</strong> drawing boxes by hand takes forever. Use your own trained Workflow model, or a built-in one: <code>yolo26n</code> knows 80 everyday things, <code>yoloe</code> finds whatever classes.yml describes, <code>sam</code> turns boxes into outlines.</p>
+<pre><code>fx.annotate(model=wf.load("./models/leaf-detector.nbm"), confidence=0.25, replace=False, batch_size=8)
+fx.annotate(model=fx.models.yolo26n)
+fx.annotate(model=fx.models.yoloe)        # prompted with classes.yml
+fx.annotate(model=fx.models.sam)          # masks for the boxes already there</code></pre>
+<p><strong>Watch out:</strong> a picture the model chokes on is marked failed and left out, never saved as "nothing here".</p>
+<h3 id="fx-export"><code>fx.export</code></h3>
+<p><strong>Toddler words:</strong> pack the box and write the label on it: what's inside, where each picture came from, and who may use it.</p>
+<p><strong>Why you'd use it:</strong> it runs everything above and writes the dataset Workflow trains from, plus LICENSE.txt, ATTRIBUTIONS.md and CITATION.cff. <code>pairs=</code> stops at a number; without it, it keeps going until the sources run out or you press Ctrl+C.</p>
+<pre><code>fx.export("./datasets/leaves.felix", pairs=None, license=None, title=None, authors=None, strict=False)
+fx.export("./datasets/leaves", license="CC-BY-4.0")        # a folder, released openly
+fx.export("./datasets/leaves.sh_felix", shard_size=1000)   # a folder of shards</code></pre>
+<p><strong>Watch out:</strong> <code>license=None</code> means closed (all rights reserved). For an open dataset, read the ⚠ lines in ATTRIBUTIONS.md: some image licences don't fit some dataset licences.</p>
 <h3 id="fx-load-and-its-splits"><code>fx.load</code> and its splits</h3>
-<p><strong>Toddler words:</strong> open the dataset. It already has three piles: <code>train</code> (learn from these), <code>val</code> (check while learning), and <code>test</code> (the final exam nobody peeks at).</p>
-<p><strong>Why you'd use it:</strong> you pass these piles straight to Workflow. Generated datasets are split 80/10/10, the same way every time. Converted datasets keep their own splits.</p>
-<pre><code>data = fx.load("shapes.felix")
-data.train, data.val, data.test          # the piles
-data.classes                             # ['circle', 'square', 'triangle']
-data.image(data.stems[0]).save("look.png")</code></pre>
-<h3 id="fx-partition-felix-partition"><code>fx.partition</code> / <code>felix partition</code></h3>
-<p><strong>Toddler words:</strong> cut one big pile into smaller piles, each a complete dataset.</p>
-<p><strong>Why you'd use it:</strong> share work between machines, make a small dataset for quick tests, or split a converted dataset your own way.</p>
-<pre><code>fx.partition("shapes.felix", output=None, parts=4, ratio=None, size=None, by_split=False,
-             names=None, shuffle=False, seed=0, pack=None, overwrite=False)
-fx.partition("shapes.felix", ratio=(80, 10, 10), names=["train", "val", "test"], shuffle=True, seed=1)</code></pre>
-<pre><code>felix partition shapes.felix --size 100</code></pre>
-<p><strong>Watch out:</strong> choose exactly one of <code>parts</code>, <code>ratio</code>, <code>size</code> or <code>by_split</code>.</p>
+<p><strong>Toddler words:</strong> open the box. It already has three piles: <code>train</code> (learn from these), <code>val</code> (check while learning), <code>test</code> (the final exam).</p>
+<p><strong>Why you'd use it:</strong> you pass these piles straight to Workflow. Imported datasets keep their splits; everything else is split 80/10/10, the same way every time.</p>
+<pre><code>data = fx.load("./datasets/leaves.felix")
+data.train, data.val, data.test, data.classes, data.splits</code></pre>
 <h3 id="fx-split-felix-split"><code>fx.split</code> / <code>felix split</code></h3>
 <p><strong>Toddler words:</strong> photocopy the pile, then keep only part of the copy. The big pile stays exactly as it was.</p>
-<p><strong>Why you'd use it:</strong> micro experiments. Trying an idea on half (or a tenth) of VOC is much faster, and you still have the whole dataset for the real run. Each train / val / test pile keeps the same share, and every picture stays in the pile it was in, so test pictures never sneak into training.</p>
-<pre><code>fx.split("voc.felix", 0.5, output=None, size=None, seed=0, overwrite=False)     # → voc_split_50.felix
-fx.split("voc.felix", size=1000, seed=0)                                        # → exactly 1000 pairs</code></pre>
-<pre><code>felix split voc.felix 0.5
-felix split voc.felix 0.1 --seed 2        # another random tenth</code></pre>
-<p><strong>Watch out:</strong> the fraction is a share, not a percent: <code>0.5</code> keeps half; <code>50</code> is refused with a hint.</p>
+<p><strong>Why you'd use it:</strong> quick experiments on a tenth of the data. Every split and class keeps its share.</p>
+<pre><code>fx.split("voc.felix", 0.5, output=None, size=None, seed=0)</code></pre>
+<h3 id="fx-shard-felix-shard"><code>fx.shard</code> / <code>felix shard</code></h3>
+<p><strong>Toddler words:</strong> a huge pile of photos goes into many small boxes, so you can carry one box at a time.</p>
+<p><strong>Why you'd use it:</strong> very large datasets. Workflow trains from a folder of shards one shard at a time.</p>
+<pre><code>fx.shard("voc.felix", output=None, size=1000)
+fx.export("./datasets/big.sh_felix")                       # or export straight into shards</code></pre>
 <h3 id="other-felix-commands">Other Felix commands</h3>
 <p><strong>Toddler words:</strong> look inside a box, zip it up, unzip it, and turn someone else's box into yours.</p>
-<p><strong>Why you'd use it:</strong> checking what you made, sending one file instead of thousands, and training on real Roboflow datasets.</p>
-<pre><code>felix info shapes.felix
-felix pack ./dataset -o dataset.felix
-felix unpack dataset.felix -o ./dataset
-felix convert coco ./roboflow-export -o data.felix</code></pre>
+<pre><code>felix info leaves.felix
+felix pack ./leaves -o leaves.felix
+felix unpack leaves.felix -o ./leaves
+felix convert ./roboflow-export -o data.felix
+felix library</code></pre>
 <p>---</p>
 <h2 id="part-2-workflow-the-brain-s-building-blocks">Part 2 · Workflow: the brain's building blocks</h2>
 <h3 id="wf-input"><code>wf.input</code></h3>
@@ -266,6 +238,19 @@ wf.Residual(
     ),
 )</code></pre>
 <p><strong>Watch out:</strong> both paths must end the same shape. If they don't, the error tells you the exact <code>shortcut=</code> to add.</p>
+<h3 id="wf-recurrent"><code>wf.recurrent</code></h3>
+<p><strong>Toddler words:</strong> think about it again. The same few layers look at the picture, then look at their own answer, then again, <code>steps</code> times, getting a bit smarter each time.</p>
+<p><strong>Why you'd use it:</strong> more "thinking" (depth) without more memory for weights: a 4-step block has the parameters of one pass. It suits small models that must stay small. The catch is speed: every step is another full pass, so 4 steps take about 4 times as long.</p>
+<pre><code>wf.recurrent(
+    wf.Conv2D(64, kernel_size=3, stride=1, padding="same"),   # the first conv sets the width (64)
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.Conv2D(64, kernel_size=3, stride=1, padding="same"),   # every conv inside: the same width
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    steps=4,
+)</code></pre>
+<p><strong>Watch out:</strong> inside, keep the size (<code>stride=1</code>, <code>padding="same"</code>) and one width for every convolution. If the incoming picture has another number of channels, step 1 projects it to the block's width by itself.</p>
 <h3 id="wf-parallel"><code>wf.parallel</code></h3>
 <p><strong>Toddler words:</strong> give the same picture to several friends, then glue (or add up) their answers.</p>
 <p><strong>Why you'd use it:</strong> let the brain look at the same thing in different ways at once (small and big windows, for example), Inception-style.</p>
@@ -323,6 +308,13 @@ model.device()            # which one am I on?</code></pre>
 <p><strong>Not enough memory?</strong> On CPU it checks first. If the batch won't fit it turns on <code>low_memory</code> (it forgets the in-between results and works them out again when it needs them: same answers, a bit slower), and if even that won't fit it tells you the biggest <code>batch_size</code> that does, before wasting any time.</p>
 <p>While it learns you see a bar, plus a table that gains a line every epoch: the training loss, the validation loss (how wrong it is on pictures it doesn't learn from) and the mAP scores. If the training loss keeps falling but the validation loss starts rising, the brain is memorising the training pictures instead of learning.</p>
 <p><strong>Watch out:</strong> <code>epochs</code> means "train *until* epoch N". To continue a model that reached 50, ask for <code>epochs=80</code> to get 30 more; <code>epochs=30</code> would do nothing.</p>
+<h3 id="fine-tuning-model-train-fine-tune-true-freeze">Fine-tuning: <code>model.train(..., fine_tune=True, freeze=...)</code></h3>
+<p><strong>Toddler words:</strong> a brain that already knows shapes learns a new kind of shape much faster than a brand-new brain.</p>
+<p><strong>Why you'd use it:</strong> you have a trained model and a small new dataset (maybe with other classes). Start from the trained weights instead of from nothing: on 46 pictures of two new shapes, a fine-tuned model reached mAP50 0.92 where one trained from scratch for the same 60 epochs got 0.005.</p>
+<pre><code>model = wf.load("runs/base/best.nbm")
+model.train(new_data, epochs=30, lr=1e-4, fine_tune=True, freeze="backbone")   # or freeze=10 (the first 10 layers)
+model.labels()                                                                 # the new dataset's classes</code></pre>
+<p><strong>Watch out:</strong> <code>fine_tune=True</code> starts a new run (fresh optimizer and schedule, <code>epochs</code> counts the new epochs). Without it, <code>train</code> continues the old run towards its total <code>epochs</code>. If the classes differ, only the head's last prediction layer starts over; everything else keeps what it learned.</p>
 <h3 id="wf-eval"><code>wf.eval</code></h3>
 <p><strong>Toddler words:</strong> a report card. Without a test: "how big and how fast am I?". With a test: "how many do I get right?".</p>
 <p><strong>Why you'd use it:</strong> before training to compare architectures (size, speed); after training to measure accuracy on the test pile. It never changes the model.</p>

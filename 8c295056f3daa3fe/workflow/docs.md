@@ -72,10 +72,10 @@ fit, the error says **what** happened, **why**, and **how to fix it**, naming th
 - **Layers**: `Conv2D`, `DepthwiseConv2D`, `PointwiseConv2D`, `SeparableConv2D`, `TransposeConv2D`, `DilatedConv2D`,
   `BatchNorm2D`, `ReLU`, `LeakyReLU`, `SiLU`, `Sigmoid`, `MaxPool2D`, `AvgPool2D`, `Upsample`.
 - **Blocks**: `Bottleneck`, `CSP`, `SPP`, `SPPF`, `SE`, `CBAM`, `Focus`.
-- **Composition**: `wf.input`, `wf.stack`, `wf.Residual` (automatic shortcut projection), `wf.parallel`, `wf.feature`, `wf.concat`, `wf.add`, `wf.FPN`, `wf.PAN`, `wf.head`.
+- **Composition**: `wf.input`, `wf.stack`, `wf.Residual` (automatic shortcut projection), `wf.recurrent` (looped blocks), `wf.parallel`, `wf.feature`, `wf.concat`, `wf.add`, `wf.FPN`, `wf.PAN`, `wf.head`.
 - **Two tasks**: detection (`wf.head(classes=N)`, boxes) and classification (`wf.head(classes=N, type="cls")`, one label per
   picture, trained on ImageNet-style class folders).
-- **Training**: one call with sensible defaults (AdamW, warm-up + cosine, GIoU + BCE loss, EMA, early stopping,
+- **Training**: one call with sensible defaults, including fine-tuning (`fine_tune=True`, `freeze=`) (AdamW, warm-up + cosine, GIoU + BCE loss, EMA, early stopping,
   `.nbm` checkpoints, crash protection: safe Ctrl+C / kill, autosave mid-epoch, exact resume; automatic low-memory
   mode on small machines).
 - **Evaluation**: `wf.eval(model)` (size, FLOPs, latency, FPS, memory) and `wf.eval(model, dataset=val)` (accuracy).
@@ -193,7 +193,7 @@ random dataset and hardware.
 Every tool, explained like you're three, then *why* you'd reach for it and where it goes. Every example writes
 out all the main arguments (with their defaults) so you can see every knob, even the ones you'd usually leave alone.
 
-Felix makes the pictures. Workflow is the brain that learns to find things in them.
+Felix collects and labels the pictures. Workflow is the brain that learns to find things in them.
 
 How to read an entry:
 
@@ -204,236 +204,172 @@ How to read an entry:
 
 ---
 
-### Part 1 · Felix: making the pictures
+### Part 1 · Felix: collecting the pictures
 
-#### `fx.class_set`
+#### `fx.load_class`
 
-**Toddler words:** a toy box with a name. Every toy you make inside it is a *kind of thing* the brain must learn
-to find.
+**Toddler words:** the shopping list. Before going out, write down what you're looking for: "leaves". Felix only keeps
+boxes for things on the list.
 
-**Why you'd use it:** the brain can only learn classes you define, and the boxes let you group them (animals,
-vehicles) so you can later pick "any animal" or "any vehicle" at random. The class name comes from the variable
-name, so `cat = ...` makes a class called `cat`.
-
-```python
-with fx.class_set("animals"):
-    cat = fx.toolkit.circle(radius=30)              # class "cat"
-    dog = fx.toolkit.rectangle(width=50, height=40) # class "dog"
-```
-
-**Watch out:** shapes made *outside* a class set are not classes: they get drawn but never labelled. That's how you
-make decoys on purpose.
-
-#### `fx.toolkit.circle`, `rectangle`, `polygon`
-
-**Toddler words:** a ball, a box, and a "connect the dots" shape.
-
-**Why you'd use it:** quick synthetic objects for testing a pipeline, or for detecting simple things (signs,
-markers, parts). `position` is only a default spot; usually `fx.paint` decides where it goes.
+**Why you'd use it:** it decides which classes the dataset has, what an open-vocabulary model is asked to find
+(`prompt`), and which names in other datasets or a model's labels mean the same thing (`aliases`).
 
 ```python
-ball = fx.toolkit.circle(radius=20, position=None, color="red", name=None)
-box  = fx.toolkit.rectangle(width=40, height=30, position=None, color="#1f77b4", name=None)
-tent = fx.toolkit.polygon(vertices=[(0, 40), (20, 0), (40, 40)], position=None, color="green", name=None)
+fx.load_class("./classes.yml")
+```
+```yaml
+classes:
+  - name: leaf
+    prompt: a green plant leaf
+    aliases: [leaves, Leaf]
+confidence: 0.3
 ```
 
-**Watch out:** without `color`, each class gets its own colour from a palette. Set it when the colour matters.
+**Watch out:** without a class file, everything is kept: a COCO import brings all 80 classes, and a built-in model
+detects everything it knows.
 
-#### `fx.stack`
+#### `fx.acquire` and `fx.sources.*`
 
-**Toddler words:** glue several shapes together into one toy. A big circle, two triangle ears and two dot eyes
-make one cat, and the brain learns "cat", not "circle" and "triangle".
+**Toddler words:** the shopping trip. Point at the places pictures come from: your folder, a video, a website, a
+museum. Felix fetches them when the dataset is built.
 
-**Why you'd use it:** real objects are made of parts. A stack lets you build a recognisable object from simple
-shapes and still get **one** class and **one** box around the whole thing. The class name is the variable name.
-Each part's `position` says where its centre goes, measured from the middle of the stack.
+**Why you'd use it:** real datasets mix sources. A folder of photos needs no preparation; COCO, YOLO and Felix
+datasets bring their boxes; online collections (Wikimedia, Openverse, iNaturalist, Open Images, Roboflow, …) bring
+each picture's licence and who to credit.
 
 ```python
-with fx.class_set("animals"):
-    cat = fx.stack(
-        fx.toolkit.polygon(vertices=[(0, 14), (7, 0), (14, 14)], position=(-13, -22), color=None),  # left ear
-        fx.toolkit.polygon(vertices=[(0, 14), (7, 0), (14, 14)], position=(13, -22), color=None),   # right ear
-        fx.toolkit.circle(radius=22, position=(0, 0), color=None),                                  # head
-        fx.toolkit.circle(radius=3, position=(-8, -4), color="black"),                               # eyes
-        fx.toolkit.circle(radius=3, position=(8, -4), color="black"),
-        position=None, color="#e8a33d", name=None,
-    )
+fx.acquire([
+    fx.sources.local("./raw/leaves", recursive=True, labels=None, license=None),
+    fx.sources.urls("./leaf_urls.txt", license=None),
+    fx.sources.wikimedia(query="plant leaves", limit=1000, licenses=None, max_side=2048),
+    fx.sources.open_images(classes=["Car", "Person"], split="validation", limit=None),
+], blur_faces=False)
 ```
 
-**Watch out:** parts are drawn in order, so put the things that go *on top* (eyes, nose) last. Parts without a
-colour use the stack's colour; parts with one keep it. Spinning or growing the stack moves all its parts together.
+**Watch out:** "public on the internet" is not "free to use". URL lists have unknown licences; export reminds you.
 
-#### `fx.toolkit.image`
+#### `fx.sources.video` and `fx.sampling`
 
-**Toddler words:** use a real sticker as a toy. The see-through parts of the sticker don't count as the toy.
+**Toddler words:** a flip book. Felix keeps some pages, not all: when the picture changes (`auto`), every few seconds
+(`interval`), or a random handful (`random`).
 
-**Why you'd use it:** cut-out photos of real objects (PNG with transparency) look far more like real life than
-plain shapes. The box is fitted to the visible pixels only, so transparent padding never makes boxes too big.
+**Why you'd use it:** a minute of video is 1,800 frames, nearly all the same. `auto` keeps one frame of a still scene
+and more when things move, so the dataset isn't 90% copies.
 
 ```python
-bike = fx.toolkit.image(source="assets/bicycle.png", width=80, height=None, position=None, name=None)
+fx.sources.video("./greenhouse.mp4", sampling=fx.sampling.auto(threshold=0.04, min_gap=0.5))
+fx.sources.video("./street.mp4", sampling=fx.sampling.interval(seconds=2))
+fx.sources.video("./street.mp4", sampling=fx.sampling.random(count=1000, seed=42))
+fx.sources.camera(device=0, sampling=fx.sampling.interval(seconds=1), count=500)
 ```
 
-**Watch out:** give only `width` *or* `height` to keep the proportions; give both to stretch. JPEG stickers need
-Pillow, and have no see-through parts.
+#### `fx.transform.center_crop`, `letterbox`
 
-#### `fx.step`
+**Toddler words:** make every picture the same size. Center crop cuts the edges off; letterbox shrinks the whole
+picture and adds grey bars.
 
-**Toddler words:** the recipe for one picture. Felix follows it again and again, rolling new dice each time.
-
-**Why you'd use it:** everything you write inside it (background, painting, changes) happens once per image. Make
-several steps (for example "busy street" and "empty street") and Felix shares the images between them.
+**Why you'd use it:** center crop shrinks big photos before annotating (faster, and the subject is usually in the
+middle); letterbox keeps every part of a scene, which suits general detectors. The boxes move with the pixels.
 
 ```python
-with fx.step(size=(640, 640), name=None):
-    ...
+fx.transform.center_crop(size=640, min_visibility=0.3)
+fx.transform.letterbox(size=640, fill=(114, 114, 114))
 ```
 
-#### `fx.canvas.background`
+#### `fx.transform.consequential`
 
-**Toddler words:** the paper you draw on: one colour, or a photo.
+**Toddler words:** zoom in on each toy and take a photo of it, plus a few photos of empty floor so the brain learns
+what "nothing" looks like.
 
-**Why you'd use it:** a plain colour is easy to learn; real photos (a folder of them, one picked per image) teach the
-brain to ignore clutter, which is what you want for real-world use.
+**Why you'd use it:** in a 4,000-pixel photo a leaf may be 40 pixels: resized to 640 for training it nearly vanishes.
+Crops around each object keep them big enough to learn, and `negative_rate` of the crops show no objects.
 
 ```python
-fx.canvas.background(color="#eeeeee", image=None)
-fx.canvas.background(color=None, image="backgrounds/")    # a different photo each time, cropped to fit
+fx.annotate(model=model)                                   # first: it needs the boxes
+fx.transform.consequential(size=640, negative_rate=0.15, margin=0.25, min_visibility=0.3, overlap=0.6, seed=0)
 ```
 
-#### `fx.random.*`
+**Watch out:** it must come after `fx.annotate`, and nothing that changes geometry may follow it. Felix stops you if
+the order is wrong.
 
-**Toddler words:** dice. Every picture rolls them again.
+#### `fx.annotate` and `fx.models`
 
-**Why you'd use it:** variety. A brain that only ever sees a cat in the middle, upright and red will fail on
-anything else. Randomness in position, size, angle and colour is what makes it robust.
+**Toddler words:** a helper who looks at every picture and draws the boxes for you.
+
+**Why you'd use it:** drawing boxes by hand takes forever. Use your own trained Workflow model, or a built-in one:
+`yolo26n` knows 80 everyday things, `yoloe` finds whatever classes.yml describes, `sam` turns boxes into outlines.
 
 ```python
-fx.random.uniform(0.5, 2.0, threshold=1.0)    # any number between 0.5 and 2
-fx.random.integer(1, 6, threshold=1.0)        # a whole number, like a real die
-fx.random.choice("red", "blue", threshold=1.0)
-fx.random.position(margin=40, threshold=1.0)  # somewhere on the paper, at least 40 px from the edges
-fx.random.color(threshold=1.0)
-fx.random.class_set("animals", threshold=1.0) # pick a toy box (any box if no names)
-fx.random.class_(None, threshold=1.0)         # pick a toy (from any box, or from the box you pass)
+fx.annotate(model=wf.load("./models/leaf-detector.nbm"), confidence=0.25, replace=False, batch_size=8)
+fx.annotate(model=fx.models.yolo26n)
+fx.annotate(model=fx.models.yoloe)        # prompted with classes.yml
+fx.annotate(model=fx.models.sam)          # masks for the boxes already there
 ```
 
-**Watch out:** `threshold=0.5` means "flip a coin first; if it says no, skip it". It's how you get a *varying number*
-of objects. Each dice call is its own die: the same variable used twice gives the same roll within one picture.
+**Watch out:** a picture the model chokes on is marked failed and left out, never saved as "nothing here".
 
-#### `fx.paint`
+#### `fx.export`
 
-**Toddler words:** put a toy on the paper.
+**Toddler words:** pack the box and write the label on it: what's inside, where each picture came from, and who may
+use it.
 
-**Why you'd use it:** this is what actually places objects. Pass a class, a random class, or a plain shape.
+**Why you'd use it:** it runs everything above and writes the dataset Workflow trains from, plus LICENSE.txt,
+ATTRIBUTIONS.md and CITATION.cff. `pairs=` stops at a number; without it, it keeps going until the sources run out
+or you press Ctrl+C.
 
 ```python
-obj = fx.paint(fx.random.class_(None, threshold=1.0), position=fx.random.position(margin=40))
+fx.export("./datasets/leaves.felix", pairs=None, license=None, title=None, authors=None, strict=False)
+fx.export("./datasets/leaves", license="CC-BY-4.0")        # a folder, released openly
+fx.export("./datasets/leaves.sh_felix", shard_size=1000)   # a folder of shards
 ```
 
-#### `fx.toolkit.transformation`
-
-**Toddler words:** change how the toy looks: spin it, grow it, recolour it, brighten it, fade it.
-
-**Why you'd use it:** the same as dice: real objects come at all angles, sizes and lighting. Calls add up (two
-rotations add, two scales multiply).
-
-```python
-fx.toolkit.transformation(obj, hue=fx.random.uniform(-20, 20), brightness=fx.random.uniform(0.8, 1.2),
-                          rotation=fx.random.uniform(0, 360), scale=fx.random.uniform(0.7, 1.5), opacity=1.0)
-```
-
-**Watch out:** `hue` is in degrees around the colour wheel, `rotation` is in degrees counter-clockwise, and the
-others are multipliers (1 = unchanged).
-
-#### `fx.gen`
-
-**Toddler words:** take a photo of where every toy is (the answer key). Toys painted *after* the photo are in
-the picture but not in the answers.
-
-**Why you'd use it:** it writes the boxes. Painting things after it adds **decoys** the brain must learn to
-ignore, which cuts false alarms.
-
-```python
-fx.gen()
-fx.paint(fx.toolkit.circle(radius=8, color="gray"), position=fx.random.position(margin=0))   # a decoy
-```
-
-#### `fx.make`
-
-**Toddler words:** do the recipe lots of times and put everything in a folder (or one `.felix` file).
-
-**Why you'd use it:** this is the moment the dataset is created. Same `seed` = the exact same dataset, which is
-handy for comparing models fairly.
-
-```python
-fx.make(pairs=1000, output="shapes.felix", seed=7, overwrite=False, quiet=False)
-```
+**Watch out:** `license=None` means closed (all rights reserved). For an open dataset, read the ⚠ lines in
+ATTRIBUTIONS.md: some image licences don't fit some dataset licences.
 
 #### `fx.load` and its splits
 
-**Toddler words:** open the dataset. It already has three piles: `train` (learn from these), `val` (check while
-learning), and `test` (the final exam nobody peeks at).
+**Toddler words:** open the box. It already has three piles: `train` (learn from these), `val` (check while
+learning), `test` (the final exam).
 
-**Why you'd use it:** you pass these piles straight to Workflow. Generated datasets are split 80/10/10, the same
-way every time. Converted datasets keep their own splits.
-
-```python
-data = fx.load("shapes.felix")
-data.train, data.val, data.test          # the piles
-data.classes                             # ['circle', 'square', 'triangle']
-data.image(data.stems[0]).save("look.png")
-```
-
-#### `fx.partition` / `felix partition`
-
-**Toddler words:** cut one big pile into smaller piles, each a complete dataset.
-
-**Why you'd use it:** share work between machines, make a small dataset for quick tests, or split a converted
-dataset your own way.
+**Why you'd use it:** you pass these piles straight to Workflow. Imported datasets keep their splits; everything else
+is split 80/10/10, the same way every time.
 
 ```python
-fx.partition("shapes.felix", output=None, parts=4, ratio=None, size=None, by_split=False,
-             names=None, shuffle=False, seed=0, pack=None, overwrite=False)
-fx.partition("shapes.felix", ratio=(80, 10, 10), names=["train", "val", "test"], shuffle=True, seed=1)
+data = fx.load("./datasets/leaves.felix")
+data.train, data.val, data.test, data.classes, data.splits
 ```
-```
-felix partition shapes.felix --size 100
-```
-
-**Watch out:** choose exactly one of `parts`, `ratio`, `size` or `by_split`.
 
 #### `fx.split` / `felix split`
 
 **Toddler words:** photocopy the pile, then keep only part of the copy. The big pile stays exactly as it was.
 
-**Why you'd use it:** micro experiments. Trying an idea on half (or a tenth) of VOC is much faster, and you still have
-the whole dataset for the real run. Each train / val / test pile keeps the same share, and every picture stays in the
-pile it was in, so test pictures never sneak into training.
+**Why you'd use it:** quick experiments on a tenth of the data. Every split and class keeps its share.
 
 ```python
-fx.split("voc.felix", 0.5, output=None, size=None, seed=0, overwrite=False)     # → voc_split_50.felix
-fx.split("voc.felix", size=1000, seed=0)                                        # → exactly 1000 pairs
-```
-```
-felix split voc.felix 0.5
-felix split voc.felix 0.1 --seed 2        # another random tenth
+fx.split("voc.felix", 0.5, output=None, size=None, seed=0)
 ```
 
-**Watch out:** the fraction is a share, not a percent: `0.5` keeps half; `50` is refused with a hint.
+#### `fx.shard` / `felix shard`
+
+**Toddler words:** a huge pile of photos goes into many small boxes, so you can carry one box at a time.
+
+**Why you'd use it:** very large datasets. Workflow trains from a folder of shards one shard at a time.
+
+```python
+fx.shard("voc.felix", output=None, size=1000)
+fx.export("./datasets/big.sh_felix")                       # or export straight into shards
+```
 
 #### Other Felix commands
 
 **Toddler words:** look inside a box, zip it up, unzip it, and turn someone else's box into yours.
 
-**Why you'd use it:** checking what you made, sending one file instead of thousands, and training on real
-Roboflow datasets.
-
 ```
-felix info shapes.felix
-felix pack ./dataset -o dataset.felix
-felix unpack dataset.felix -o ./dataset
-felix convert coco ./roboflow-export -o data.felix
+felix info leaves.felix
+felix pack ./leaves -o leaves.felix
+felix unpack leaves.felix -o ./leaves
+felix convert ./roboflow-export -o data.felix
+felix library
 ```
 
 ---
@@ -754,6 +690,30 @@ wf.Residual(
 
 **Watch out:** both paths must end the same shape. If they don't, the error tells you the exact `shortcut=` to add.
 
+#### `wf.recurrent`
+
+**Toddler words:** think about it again. The same few layers look at the picture, then look at their own answer,
+then again, `steps` times, getting a bit smarter each time.
+
+**Why you'd use it:** more "thinking" (depth) without more memory for weights: a 4-step block has the parameters of one
+pass. It suits small models that must stay small. The catch is speed: every step is another full pass, so 4 steps
+take about 4 times as long.
+
+```python
+wf.recurrent(
+    wf.Conv2D(64, kernel_size=3, stride=1, padding="same"),   # the first conv sets the width (64)
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.Conv2D(64, kernel_size=3, stride=1, padding="same"),   # every conv inside: the same width
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    steps=4,
+)
+```
+
+**Watch out:** inside, keep the size (`stride=1`, `padding="same"`) and one width for every convolution. If the
+incoming picture has another number of channels, step 1 projects it to the block's width by itself.
+
 #### `wf.parallel`
 
 **Toddler words:** give the same picture to several friends, then glue (or add up) their answers.
@@ -899,6 +859,24 @@ validation loss starts rising, the brain is memorising the training pictures ins
 
 **Watch out:** `epochs` means "train *until* epoch N". To continue a model that reached 50, ask for `epochs=80` to get
 30 more; `epochs=30` would do nothing.
+
+#### Fine-tuning: `model.train(..., fine_tune=True, freeze=...)`
+
+**Toddler words:** a brain that already knows shapes learns a new kind of shape much faster than a brand-new brain.
+
+**Why you'd use it:** you have a trained model and a small new dataset (maybe with other classes). Start from the
+trained weights instead of from nothing: on 46 pictures of two new shapes, a fine-tuned model reached mAP50 0.92 where
+one trained from scratch for the same 60 epochs got 0.005.
+
+```python
+model = wf.load("runs/base/best.nbm")
+model.train(new_data, epochs=30, lr=1e-4, fine_tune=True, freeze="backbone")   # or freeze=10 (the first 10 layers)
+model.labels()                                                                 # the new dataset's classes
+```
+
+**Watch out:** `fine_tune=True` starts a new run (fresh optimizer and schedule, `epochs` counts the new epochs). Without
+it, `train` continues the old run towards its total `epochs`. If the classes differ, only the head's last prediction
+layer starts over; everything else keeps what it learned.
 
 #### `wf.eval`
 
@@ -1142,9 +1120,9 @@ wf.Residual(
 
 Everything you can put in a model, one line each. Write every layer/block on its own line inside `wf.stack(...)`.
 Blocks build their own layers inside: you only pick their arguments, you don't put layers in between.
-Only `wf.stack`, `wf.Residual` and `wf.parallel` take layers you write yourself.
+Only `wf.stack`, `wf.Residual`, `wf.recurrent` and `wf.parallel` take layers you write yourself.
 
-Workflow 0.5.0. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
+Workflow 0.7.0. Full details: [Layers](#layers), [Blocks](#blocks), [Composition](#composition). `workflow init` writes this same table as `library.md` next to the notebook.
 
 ### Start
 
@@ -1193,6 +1171,7 @@ Input channels are always worked out from the line above. `padding="same"` keeps
 | Tool | What it does | You choose | Example |
 |---|---|---|---|
 | `wf.Residual` | nothing of its own: wraps the layers you write inside it with a skip connection (output = layers(x) + x) | the layers, plus `shortcut=` (`"auto"` by default: projects by itself when the shape changes) | see [wf.Residual below](#residual) |
+| `wf.recurrent` | the layers you write inside it, applied `steps` times with the same weights (a looped CNN: more depth, no more parameters, more latency) | the layers (convolutions all of one width), `steps=2` | `wf.recurrent(wf.Conv2D(64, kernel_size=3, padding="same"), wf.BatchNorm2D(), wf.SiLU(), steps=4)` |
 | `wf.parallel` | sends the same input down every branch and merges the results | the branches (2+), `merge="concat"` or `"add"` | see [wf.parallel below](#parallel) |
 | `wf.feature` | names the current tensor so later lines can reach back to it; passes it on unchanged | a name, or a tuple of names after FPN/PAN | `wf.feature("p3")` |
 | `wf.concat` | joins named features along channels (same height and width) | the feature names | `wf.concat("p3", "up")` |
@@ -1551,6 +1530,7 @@ shortcut is matched automatically, so the two paths always have the same shape.
 |---|---|
 | `wf.stack(wf.input(*None), *layers)` | layers in order. The outermost stack is the model; `input` is `(C, H, W)`, default `(3, 640, 640)` |
 | `wf.Residual(*layers, shortcut="auto")` | `layers(x) + shortcut(x)`. `"auto"`: the input itself when the shape is kept, else a 1×1 Conv2D + BatchNorm2D that matches it. `"identity"`: always the input (error if shapes differ). A layer or `wf.stack(...)`: your own shortcut. `False`: no shortcut |
+| `wf.recurrent(*layers, steps=2)` | the same layers applied `steps` times, each step feeding the next (shared weights: the parameters of one pass, the depth and latency of `steps` passes). See [Recurrent blocks](#recurrent-blocks) |
 | `wf.parallel(*branches, merge="concat")` | every branch receives the same input; results are concatenated along channels or summed (`merge="add"`) |
 | `wf.feature("name")` | registers the current tensor under a name and passes it on unchanged. After a pyramid, give one name per map: `wf.feature(("n3", "n4", "n5"))` |
 | `wf.concat("a", "b", ...)` | concatenates named features along channels (same height and width) |
@@ -1623,6 +1603,36 @@ layer 2 (Residual): Residual cannot match its shortcut automatically.
   fix: use padding='same' inside the block, or give your own shortcut=wf.stack(...).
 ```
 
+### Recurrent blocks
+
+```python
+wf.recurrent(
+    wf.Conv2D(64, kernel_size=3, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    wf.Conv2D(64, kernel_size=3, padding="same"),
+    wf.BatchNorm2D(),
+    wf.SiLU(),
+    steps=4,
+),
+```
+
+A looped network, like a looped transformer but with convolutions: the block runs `steps` times with the same
+weights, each step refining the previous step's output. A small block can think "deeper" without more parameters; the
+price is latency (each step is a full pass) and memory during training. `model.summary()` shows the parameters once and
+the MACs of every step.
+
+- **Width.** The first line is a convolution; its `out_channels` (C) is the width of the whole block, and every
+  convolution inside must output C too (Workflow says which line breaks this).
+- **Projection.** If the block's input has a different number of channels, step 1 uses a projection: a copy of the
+  first convolution taking the input's channels to C. Steps 2 onwards use the first convolution itself. The
+  projection's weights are the only extra parameters.
+- **Size.** Every step must give back the shape it received: use stride 1 and `padding="same"` inside, and downsample
+  before or after the block.
+- **BatchNorm.** BatchNorm2D lines directly inside share their scale and shift across steps but keep separate running
+  statistics per step, because each step sees different values.
+- Blocks such as `wf.Residual(...)` or `wf.CSP(...)` can go inside (as long as they keep the width).
+
 ---
 
 ## Model
@@ -1643,6 +1653,9 @@ The outermost `wf.stack(...)` is the model.
 | `model.export(format=..., output=..., precision=...)`, `model.quantize(...)` | [Quantisation and export](#quantisation-and-export) |
 | `model(x, train=False)` | forward pass on a `(N, C, H, W)` Workflow tensor |
 | `model.history`, `model.class_names`, `model.precision` | training history, class names (from the dataset), `fp32` / `fp16` / `int8` |
+| `model.set_classes(names)` | re-targets the head at other classes: its last prediction layer starts afresh, every other weight is kept (what `train(..., fine_tune=True)` does when the classes differ) |
+| `model.labels()`, `wf.labels("model.nbm")` | what the model detects (or classifies): its class names in class-id order (`"0"`, `"1"`, … before training on named classes); the file form reads only metadata |
+| `wf.practice_dataset(path, pairs=400, img_size=256, seed=1, max_objects=2)` | a small circles / squares / triangles detection dataset to try things out (stored through Felix) |
 
 FLOPs count convolutions (2 per multiply-accumulate); BatchNorm folds into the convolution at inference and
 activations, pooling and additions are negligible.
@@ -2110,6 +2123,40 @@ on one blank picture, taking a moment) and compares it with free RAM:
 Pass `low_memory=True` to force it on any device, or `False` to turn the check off. Datasets are read from disk as
 needed, so their size doesn't matter; only the batch does.
 
+### Sharded datasets
+
+A folder of `.sh_felix` shards (`fx.shard`, `felix shard`, `fx.export("name.sh_felix")`) trains **one shard at a time**:
+the shard in use is read into memory in one pass, the next one loads in the background while it trains, and each is
+dropped after its last batch, so at most two shards are in memory and reads from disk (or a network drive) are long
+and sequential. Shuffling keeps that true: every epoch visits the shards in a new random order and shuffles the
+pictures inside each shard (with many small shards that is close to a full shuffle). The order comes from the run's
+seed, so crash protection still resumes at the exact step. The memory check counts the two shards.
+
+```python
+model.train("voc_shards/", epochs=100)          # a path, or fx.load("voc_shards/") and its splits
+```
+
+### Fine-tuning
+
+```python
+model = wf.load("runs/base/best.nbm")
+model.train(new_data, epochs=30, lr=1e-4, fine_tune=True, freeze="backbone")
+```
+
+- `fine_tune=True` starts a **new run** from the loaded weights: a fresh optimizer, learning-rate schedule and epoch
+  count (`epochs` counts the fine-tuning epochs; the history starts again).
+- **Other classes:** if the dataset's classes differ from the model's, the head's last prediction layer is rebuilt for
+  them (every other weight is kept) and the model takes the new class names. `model.set_classes(names)` does the same
+  by hand.
+- `freeze=N` keeps the first N layers after `wf.input` fixed; `freeze="backbone"` keeps everything before the first
+  FPN / PAN / head. Frozen layers do not change, use their stored BatchNorm statistics, and need no gradient (faster).
+  They are released when training ends.
+- A lower learning rate (1e-4 to 3e-4) usually suits; with a frozen backbone 1e-3 is fine.
+
+Measured on a small new dataset (46 training pictures of two shapes a base model never saw, 60 epochs, CPU, a few
+seconds each): from scratch mAP50 0.005; fine-tuned with a frozen backbone 0.916; fine-tuned with every layer 0.894
+(best 0.926).
+
 ### Continuing
 
 ```python
@@ -2352,6 +2399,7 @@ Errors carry `what`, `why`, `fix` and `where` attributes for programs that want 
 ```
 workflow init [NOTEBOOK.ipynb] [--dataset D]    starter notebook: small model, benchmarks before/after, saving
 workflow info MODEL.nbm                        classes, precision, training progress, layer summary
+workflow labels MODEL.nbm [--json]             what the model detects: class ids and names
 workflow predict <model_path> <image_path>      detect objects; original/, annotated/, predictions.json → results/
 workflow eval MODEL.nbm [--dataset D --split test]   size/FLOPs/FPS, plus accuracy with a dataset
 workflow quantize MODEL.nbm int8|fp16|fp32 [--calibration D] [-o OUT]   post-training quantisation
@@ -2451,9 +2499,48 @@ unless you pass `--overwrite`.
 
 All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webcam` need `opencv-python`.
 
+### What a model detects: `workflow labels`
+
+```
+workflow labels detector.nbm             # a table of class ids and names
+workflow labels detector.nbm --json      # {"model", "task", "labels": [...]} for scripts
+```
+
+It reads only the file's metadata (no weights are loaded), so it is instant even for large models. In Python:
+`model.labels()` for a loaded model, or `wf.labels("detector.nbm")` straight from a file.
+
 ---
 
 ## Changes
+
+### 0.7.0
+
+- **`wf.recurrent(*layers, steps=n)`**: a looped convolutional block (like a looped transformer): the same layers run
+  `n` times with shared weights, for more depth without more parameters (at the cost of latency). The first
+  convolution sets the width every convolution inside must keep; a projection handles a different input width at step
+  1; BatchNorm keeps running statistics per step. See [Composition](#recurrent-blocks).
+- **Fine-tuning**: `model.train(..., fine_tune=True)` starts a new run from loaded weights (and re-targets the head if
+  the dataset's classes differ); `freeze=N` / `freeze="backbone"` keeps layers fixed; `model.set_classes(names)`.
+  On a small new dataset: mAP50 0.92 fine-tuned vs 0.005 from scratch. See [Training](#fine-tuning).
+- A training set whose images were all exported without annotations now says so, instead of "the split is empty".
+
+### 0.6.0
+
+- **`model.labels()`**, **`wf.labels("model.nbm")`** and **`workflow labels MODEL.nbm [--json]`**: what a model detects,
+  as class ids and names (the file forms read only metadata).
+- Works with **Felix 1.0** (the dataset-engineering redesign): Felix datasets now carry provenance, licences and
+  annotation status. Images exported without any annotation (status "none") are left out of training instead of being
+  learned as pictures with nothing in them; Felix images are Pillow images.
+- **`wf.practice_dataset(path)`**: the starter notebook's practice dataset (circles, squares, triangles with boxes),
+  drawn with Pillow and stored through Felix's `acquire` / `export`. It replaces Felix's removed synthetic generator.
+- Felix 1.0 can annotate datasets with your Workflow models: `fx.annotate(model=wf.load("model.nbm"))`.
+
+### 0.5.1
+
+- **Sharded datasets** (a folder of Felix `.sh_felix` shards) train one shard at a time: the shard in use in memory,
+  the next one loading in the background, each dropped after its last batch. Shards come in a new random order every
+  epoch with the pictures shuffled inside each; resume stays exact. Needs Felix 0.7.
+- `wf.inference` and `workflow predict` recognise shard folders and class folders as datasets.
 
 ### 0.5.0
 
