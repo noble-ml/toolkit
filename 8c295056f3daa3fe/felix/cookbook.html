@@ -40,10 +40,13 @@ fx.export("./datasets/leaves.felix")    # 6. run it all and write the dataset</c
   - tomato
   - name: white tiger
     prompt: a white bengal tiger          # optional: a more precise description for the model
+  - name: dog
+    prompt: [dog, puppy, a dog lying down]   # optional: several ways to say it; any of them finds a dog
     aliases: [White tiger, tiger_white]   # optional: other names that mean this class
     confidence: 0.3                       # optional: this class's own minimum score
 confidence: 0.25                          # optional: the default minimum score</code></pre>
-<p><strong>Watch out:</strong> without a class file, everything is kept: a COCO import brings all 80 classes, and a model labels everything it knows. Good for "collect anything", noisy for a focused detector.</p>
+<p><strong>Several prompts:</strong> when one description misses things, give a few. The model looks for each, every box is named after the class, and two prompts boxing the same dog become one box.</p>
+<p><strong>Watch out:</strong> without a class file, everything is kept: a COCO import brings all 80 classes, and a model labels everything it knows. Good for "collect anything", noisy for a focused detector. A prompt can belong to one class only.</p>
 <p>---</p>
 <h2 id="part-2-where-the-pictures-come-from">Part 2 · Where the pictures come from</h2>
 <h3 id="fx-acquire"><code>fx.acquire</code></h3>
@@ -98,6 +101,10 @@ fx.sources.urls(["https://example.org/a.jpg", "https://example.org/b.jpg"], lice
 <p><strong>Toddler words:</strong> libraries of free pictures. Ask for "oak trees" and they hand you oak trees, with a note saying who took each one and how you may use it.</p>
 <p><strong>Why you'd use it:</strong> lots of real, varied pictures with clear licences, for free. Pick by what you need:</p>
 <table><thead><tr><th>Need</th><th>Source</th></tr></thead><tbody><tr><td>anything, any topic</td><td><code>wikimedia</code>, <code>openverse</code>, <code>flickr</code></td></tr><tr><td>plants and animals</td><td><code>inaturalist</code> (by taxon), <code>gbif</code></td></tr><tr><td>space, science</td><td><code>nasa</code></td></tr><tr><td>art, objects, history</td><td><code>artic</code>, <code>smithsonian</code></td></tr><tr><td>high-quality stock photos</td><td><code>unsplash</code>, <code>pexels</code> (keys needed)</td></tr><tr><td>street scenes</td><td><code>mapillary</code></td></tr><tr><td>already labelled</td><td><code>open_images</code>, <code>coco</code>, <code>roboflow</code>, <code>huggingface</code>, <code>kaggle</code></td></tr></tbody></table>
+<p><strong>Several searches in one source:</strong> give a list. The searches run side by side, share the <code>limit</code> equally, and a picture found by two of them is taken once. Each picture records which search found it.</p>
+<pre><code>fx.sources.wikimedia(query=["oak leaf", "maple leaf", "beech leaf"], limit=900)    # 300 of each
+fx.sources.inaturalist(taxon=["Quercus", "Acer", "Fagus"], limit=1500, label=True)
+fx.sources.gbif(scientific_name=["Pica pica", "Corvus corax"], limit=400)</code></pre>
 <p><strong>No target: take whatever comes.</strong> Leave the query out and a source gives you whatever it has: its own "anything" feed (random Commons files, the newest Unsplash photos, any species on iNaturalist). A source without such a feed, or once its feed runs dry, works through a built-in vocabulary of about 4,600 subjects: the tag list of Recognize Anything (RAM++), from "abacus" to "wind turbine", plus everyday subjects. It asks for them in shuffled order, at most 25 pictures per subject, so no subject takes over.</p>
 <pre><code>fx.acquire([fx.sources.wikimedia(), fx.sources.openverse(), fx.sources.artic()])
 fx.sources.openverse(limit=500).using(vocabulary="general")                          # ~150 everyday subjects only
@@ -136,7 +143,7 @@ fx.sources.openverse(query="bicycle", source="flickr")    # only one of its prov
 <pre><code>fx.sources.inaturalist(taxon="Quercus", limit=500, licenses=("cc0", "cc-by", "cc-by-sa"), size="large",
                        quality="research", label=False, place_id=None)
 fx.sources.inaturalist(limit=1000)                       # any species</code></pre>
-<p><strong>Watch out:</strong> each search stops at 10,000 results; use narrower taxa for more.</p>
+<p><strong>Watch out:</strong> each search stops at 10,000 results; use narrower taxa for more. A name means exactly that taxon and everything under it ("Pinus": every pine; "red oak": *Quercus rubra*); a name iNaturalist doesn't know stops with the closest matches.</p>
 <h3 id="fx-sources-gbif"><code>fx.sources.gbif</code></h3>
 <p><strong>Toddler words:</strong> the world's big list of "where was this plant or animal seen", from museums and scientists, with photos.</p>
 <p><strong>Why you'd use it:</strong> museum specimens and field photos, including species iNaturalist has few of.</p>
@@ -312,6 +319,19 @@ fx.annotate(model=fx.models.yoloe("yoloe-26l-seg.pt"))   # larger: better on har
 <pre><code>fx.annotate(model=fx.models.yoloe)        # boxes first
 fx.annotate(model=fx.models.sam)          # then outlines for them</code></pre>
 <p><strong>Watch out:</strong> it adds masks to existing boxes and never finds new objects; pictures without boxes are left as they are.</p>
+<h3 id="fx-use"><code>fx.use</code></h3>
+<p><strong>Toddler words:</strong> tell Felix once which helper does the looking (the computer's brain, or a graphics card), so you don't have to say it again for every model.</p>
+<p><strong>Why you'd use it:</strong> annotating thousands of pictures is much faster on a GPU. Without it, Ultralytics guesses. With <code>fx.use("cuda")</code> (or <code>"mps"</code> on a Mac) every model in the session uses it.</p>
+<pre><code>fx.use("cuda")                                    # every fx.annotate from now on
+fx.annotate(model=fx.models.yoloe)                # → on the GPU
+fx.annotate(model=fx.models.sam(device="cpu"))    # a model's own device= still wins
+
+with fx.use("cpu"):                               # only inside the block
+    fx.annotate(model=fx.models.yolo26n)
+
+fx.use()                                          # what is it now, and where does that come from?</code></pre>
+<p>Setting <code>FELIX_DEVICE=cuda</code> in the environment does the same without touching the code, so one notebook runs on a laptop and on a GPU box unchanged.</p>
+<p><strong>Watch out:</strong> asking for a device that isn't there fails straight away instead of quietly using the CPU. <code>"modal"</code> belongs to Workflow (cloud training), not Felix.</p>
 <h2 id="part-5-writing-the-dataset">Part 5 · Writing the dataset</h2>
 <h3 id="fx-export"><code>fx.export</code></h3>
 <p><strong>Toddler words:</strong> pack the box and write the label on it: what's inside, where each picture came from, and who may use it.</p>
@@ -409,7 +429,7 @@ fx.export("./datasets/tomatoes.felix")</code></pre>
 <pre><code>fx.load_class("./classes.yml")
 fx.acquire([
     fx.sources.local("./raw/tomatoes"),
-    fx.sources.openverse(query="tomato plant", limit=1000),
+    fx.sources.openverse(query=["tomato plant", "cherry tomatoes", "tomato harvest"], limit=1500),
     fx.sources.inaturalist(taxon="Solanum lycopersicum", limit=1000),
     fx.sources.open_images(classes=["Tomato"], limit=1000),     # already labelled: kept as they are
 ])
@@ -429,9 +449,7 @@ fx.export("./datasets/anything.sh_felix", pairs=10_000, shard_size=1000)</code><
 <p><strong>Toddler words:</strong> One word per picture ("oak", "maple", "beech") instead of boxes, straight from nature photographers.</p>
 <p>One label per picture instead of boxes: iNaturalist names each photo's species.</p>
 <pre><code>fx.acquire([
-    fx.sources.inaturalist(taxon="Quercus robur", limit=800, label=True),
-    fx.sources.inaturalist(taxon="Acer pseudoplatanus", limit=800, label=True),
-    fx.sources.inaturalist(taxon="Fagus sylvatica", limit=800, label=True),
+    fx.sources.inaturalist(taxon=["Quercus robur", "Acer pseudoplatanus", "Fagus sylvatica"], limit=2400, label=True),
 ])
 fx.transform.center_crop(size=384)
 fx.transform.augment(copies=1, flip=0.5, rotate=15, brightness=0.2)

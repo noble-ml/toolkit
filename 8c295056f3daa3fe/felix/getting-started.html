@@ -26,6 +26,7 @@ classes:
     prompt: a green plant leaf           # what an open-vocabulary model (fx.models.yoloe) looks for
     aliases: [Leaf, leaves]              # names that mean "leaf" in datasets you import or in a model's labels
   - name: flower
+    prompt: [flower, blossom]            # several prompts for one class: any of them finds it
 confidence: 0.3                          # minimum model confidence (optional; per class too)</code></pre>
 <pre><code>import felix as fx
 

@@ -50,7 +50,8 @@ you stop it (Ctrl+C), and the dataset written so far is closed properly.
   Felix datasets), video files, cameras and streams, web URLs, Wikimedia Commons, Openverse, Flickr, Unsplash, Pexels,
   iNaturalist, GBIF, NASA, the Art Institute of Chicago, the Smithsonian, Roboflow, Open Images, COCO 2017,
   Hugging Face, Kaggle and Mapillary. Each uses its provider's real API and keeps what the provider says about
-  licence and attribution. Leave out the query and a search source takes whatever it has. Downloads run in parallel
+  licence and attribution. Give a list of queries to run several searches in one source, or leave the query out and
+  a search source takes whatever it has (then a ~4,600-subject vocabulary, from the RAM++ tag list). Downloads run in parallel
   over kept-alive connections (10–20× faster than 1.1), and downloaded images are cached for fast re-runs.
 - **Video sampling** (`fx.sampling`): `auto()` (only when the scene changes), `interval(seconds=)`, `random(count=)`.
 - **Transforms** (`fx.transform`): `center_crop`, `letterbox`, `consequential` (object-focused crops plus negative
@@ -58,7 +59,7 @@ you stop it (Ctrl+C), and the dataset written so far is closed properly.
   `map_classes`, `filter_classes`, `filter_images`, `blur_faces`, and `custom` for your own. Boxes and masks move with
   the pixels; augmented copies, mosaics and crops stay in their original's train / val / test split.
 - **Annotation** (`fx.annotate`): with your own Workflow model, or the built-in `fx.models.yolo26n`, `fx.models.yoloe`
-  (open vocabulary, prompted from classes.yml; both bundled, so they work offline) and `fx.models.sam` (masks for boxes). Images the model fails on are
+  (open vocabulary, prompted from classes.yml, several prompts per class allowed; both bundled, so they work offline) and `fx.models.sam` (masks for boxes). Images the model fails on are
   never mistaken for images without objects.
 - **Export** (`fx.export`): a `.felix` file, a folder, or a folder of `.sh_felix` shards, with LICENSE.txt,
   ATTRIBUTIONS.md and CITATION.cff, for an open (`license="CC-BY-4.0"` or `"auto"`) or closed dataset.
@@ -85,12 +86,12 @@ Why the extra flags:
 - **`--no-deps`** and the separate `pip install Pillow rich`: with `--no-index` pip can't fetch dependencies from this
   page, so install them first the normal way.
 
-Upgrade by adding `--upgrade --no-cache-dir`; pin a version with `felix==1.2.0`.
+Upgrade by adding `--upgrade --no-cache-dir`; pin a version with `felix==1.4.0`.
 
 ### Colab / notebooks (direct link)
 
 ```
-!pip install BASE_URL/files/felix-1.2.0-py3-none-any.whl
+!pip install BASE_URL/files/felix-1.4.0-py3-none-any.whl
 ```
 
 ### Optional parts
@@ -133,6 +134,7 @@ classes:
     prompt: a green plant leaf           # what an open-vocabulary model (fx.models.yoloe) looks for
     aliases: [Leaf, leaves]              # names that mean "leaf" in datasets you import or in a model's labels
   - name: flower
+    prompt: [flower, blossom]            # several prompts for one class: any of them finds it
 confidence: 0.3                          # minimum model confidence (optional; per class too)
 ```
 
@@ -250,13 +252,18 @@ classes:
   - tomato
   - name: white tiger
     prompt: a white bengal tiger          # optional: a more precise description for the model
+  - name: dog
+    prompt: [dog, puppy, a dog lying down]   # optional: several ways to say it; any of them finds a dog
     aliases: [White tiger, tiger_white]   # optional: other names that mean this class
     confidence: 0.3                       # optional: this class's own minimum score
 confidence: 0.25                          # optional: the default minimum score
 ```
 
+**Several prompts:** when one description misses things, give a few. The model looks for each, every box is named after
+the class, and two prompts boxing the same dog become one box.
+
 **Watch out:** without a class file, everything is kept: a COCO import brings all 80 classes, and a model labels
-everything it knows. Good for "collect anything", noisy for a focused detector.
+everything it knows. Good for "collect anything", noisy for a focused detector. A prompt can belong to one class only.
 
 ---
 
@@ -394,6 +401,15 @@ who took each one and how you may use it.
 | street scenes | `mapillary` |
 | already labelled | `open_images`, `coco`, `roboflow`, `huggingface`, `kaggle` |
 
+**Several searches in one source:** give a list. The searches run side by side, share the `limit` equally, and a
+picture found by two of them is taken once. Each picture records which search found it.
+
+```python
+fx.sources.wikimedia(query=["oak leaf", "maple leaf", "beech leaf"], limit=900)    # 300 of each
+fx.sources.inaturalist(taxon=["Quercus", "Acer", "Fagus"], limit=1500, label=True)
+fx.sources.gbif(scientific_name=["Pica pica", "Corvus corax"], limit=400)
+```
+
 **No target: take whatever comes.** Leave the query out and a source gives you whatever it has: its own "anything"
 feed (random Commons files, the newest Unsplash photos, any species on iNaturalist). A source without such a feed, or
 once its feed runs dry, works through a built-in vocabulary of about 4,600 subjects: the tag list of Recognize
@@ -489,7 +505,9 @@ fx.sources.inaturalist(taxon="Quercus", limit=500, licenses=("cc0", "cc-by", "cc
 fx.sources.inaturalist(limit=1000)                       # any species
 ```
 
-**Watch out:** each search stops at 10,000 results; use narrower taxa for more.
+**Watch out:** each search stops at 10,000 results; use narrower taxa for more. A name means exactly that taxon
+and everything under it ("Pinus": every pine; "red oak": *Quercus rubra*); a name iNaturalist doesn't know stops with
+the closest matches.
 
 #### `fx.sources.gbif`
 
@@ -897,6 +915,31 @@ fx.annotate(model=fx.models.sam)          # then outlines for them
 **Watch out:** it adds masks to existing boxes and never finds new objects; pictures without boxes are left as they
 are.
 
+#### `fx.use`
+
+**Toddler words:** tell Felix once which helper does the looking (the computer's brain, or a graphics card), so
+you don't have to say it again for every model.
+
+**Why you'd use it:** annotating thousands of pictures is much faster on a GPU. Without it, Ultralytics guesses.
+With `fx.use("cuda")` (or `"mps"` on a Mac) every model in the session uses it.
+
+```python
+fx.use("cuda")                                    # every fx.annotate from now on
+fx.annotate(model=fx.models.yoloe)                # → on the GPU
+fx.annotate(model=fx.models.sam(device="cpu"))    # a model's own device= still wins
+
+with fx.use("cpu"):                               # only inside the block
+    fx.annotate(model=fx.models.yolo26n)
+
+fx.use()                                          # what is it now, and where does that come from?
+```
+
+Setting `FELIX_DEVICE=cuda` in the environment does the same without touching the code, so one notebook runs on a
+laptop and on a GPU box unchanged.
+
+**Watch out:** asking for a device that isn't there fails straight away instead of quietly using the CPU.
+`"modal"` belongs to Workflow (cloud training), not Felix.
+
 ### Part 5 · Writing the dataset
 
 #### `fx.export`
@@ -1104,7 +1147,7 @@ Same classes, more variety: your photos plus openly licensed ones, without copie
 fx.load_class("./classes.yml")
 fx.acquire([
     fx.sources.local("./raw/tomatoes"),
-    fx.sources.openverse(query="tomato plant", limit=1000),
+    fx.sources.openverse(query=["tomato plant", "cherry tomatoes", "tomato harvest"], limit=1500),
     fx.sources.inaturalist(taxon="Solanum lycopersicum", limit=1000),
     fx.sources.open_images(classes=["Tomato"], limit=1000),     # already labelled: kept as they are
 ])
@@ -1137,9 +1180,7 @@ One label per picture instead of boxes: iNaturalist names each photo's species.
 
 ```python
 fx.acquire([
-    fx.sources.inaturalist(taxon="Quercus robur", limit=800, label=True),
-    fx.sources.inaturalist(taxon="Acer pseudoplatanus", limit=800, label=True),
-    fx.sources.inaturalist(taxon="Fagus sylvatica", limit=800, label=True),
+    fx.sources.inaturalist(taxon=["Quercus robur", "Acer pseudoplatanus", "Fagus sylvatica"], limit=2400, label=True),
 ])
 fx.transform.center_crop(size=384)
 fx.transform.augment(copies=1, flip=0.5, rotate=15, brightness=0.2)
@@ -1202,6 +1243,11 @@ fx.export("./datasets/try-512.felix", overwrite=True)
 Pass any mix to `fx.acquire([...])`. Every image keeps a `source` record in its annotation: where it came from,
 its licence, who to credit and when it was collected. `limit=None` (the default for online sources) means "as many as
 the provider gives": with `fx.export(..., pairs=N)` the export simply stops asking once it has N pairs.
+
+**Several searches.** Every search argument also takes a list: `query=[...]` (Wikimedia, Openverse, Flickr, Unsplash,
+Pexels, NASA, the Art Institute, the Smithsonian), `taxon=[...]` (iNaturalist), `scientific_name=[...]` (GBIF). The
+searches run side by side, share `limit` equally (`limit=900` with three queries: 300 each), and a picture found by
+two is taken once. Each picture's `source` records the search that found it.
 
 **No target, no problem.** The query, taxon or class of the search sources is optional: `fx.sources.wikimedia()`
 gives random Commons files, `openverse()` / `nasa()` / `smithsonian()` / `gbif()` / `inaturalist()` whatever they
@@ -1326,7 +1372,9 @@ competing service; export flags them when you release a dataset openly.
 
 #### `fx.sources.inaturalist(taxon=None, limit=None, licenses=("cc0", "cc-by", "cc-by-sa"), size="large", quality="research", label=False, place_id=None)`
 Research-grade iNaturalist observation photos for a taxon (scientific or common name), with each photo's own licence
-and attribution. `label=True` labels each image with its species (classification). Pages stop at 10,000 results. No taxon: any species.
+and attribution. `label=True` labels each image with its species (classification). Pages stop at 10,000 results. No taxon: any species. The
+name is looked up first and means exactly that taxon and everything under it ("Pinus": all pines, not the pine
+siskin *Spinus pinus*; common names work: "red oak" is *Quercus rubra*).
 
 #### `fx.sources.gbif(scientific_name=None, query=None, limit=None, licenses=("CC0_1_0", "CC_BY_4_0"), country=None)`
 Occurrence images from GBIF, with the publishing institution's licence and rights holder. Neither name nor
@@ -1394,10 +1442,17 @@ classes:
   - leaf                                # just a name
   - name: fruit
     prompt: a ripe tomato on the vine   # for open-vocabulary models (default: the name)
+  - name: dog
+    prompt: [dog, puppy, a dog lying down]   # several prompts: any of them finds the class
     aliases: [tomato, Tomato]           # names that mean this class in imported data / model labels
     confidence: 0.4                     # optional minimum model confidence for this class
 confidence: 0.25                        # optional default
 ```
+
+Several prompts (`prompt: [...]`, or `prompts:`) all look for the same class: YOLOE is asked for each, the boxes
+are named after the class, and boxes of one class overlapping by more than 60 % (two prompts finding the same
+object) are merged, keeping the most confident. A prompt may belong to one class only. Use it for synonyms
+("car", "automobile"), kinds ("sedan", "hatchback") and looks ("a dog lying down").
 
 A bare list (`classes: [leaf, fruit]` or a top-level list) works too. Class ids follow the file's order. Imported boxes
 and detections are mapped onto these names (case-insensitive, through aliases); others are left out. Without a class
@@ -1496,6 +1551,15 @@ Returns `{"pairs", "path", "license", "splits", "licence_issues", "failed", "sto
 
 ### `fx.reset()`
 Forget the class file, sources and steps (start another dataset in the same program).
+
+### `fx.use(device)`
+The device Felix's models run on when they don't name one: `"cpu"`, `"cuda"`, `"cuda:N"` (or `"N"`), `"mps"`, or
+`"auto"` / `None` (back to automatic). Takes effect at once; `with fx.use("cuda"):` sets it only inside the block, and
+`fx.use()` shows the current choice. First match wins: the model's own `device=` (`fx.models.yoloe(device="cuda")`),
+then `fx.use`, then the `FELIX_DEVICE` environment variable, then automatic (Ultralytics' choice; a Workflow model's
+own). A device that isn't on this machine raises an error at once; `"modal"` is a Workflow training device, not a
+Felix one. It applies to `fx.annotate` with the built-in models and with Workflow models, and isn't cleared by
+`fx.reset()`.
 
 ### Reading and managing datasets
 - `fx.load(path)` → `Dataset`: a `.felix` file, a folder, a folder of shards, a single `.sh_felix`, or class folders.

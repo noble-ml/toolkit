@@ -24,9 +24,12 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
   - leaf                                # just a name
   - name: fruit
     prompt: a ripe tomato on the vine   # for open-vocabulary models (default: the name)
+  - name: dog
+    prompt: [dog, puppy, a dog lying down]   # several prompts: any of them finds the class
     aliases: [tomato, Tomato]           # names that mean this class in imported data / model labels
     confidence: 0.4                     # optional minimum model confidence for this class
 confidence: 0.25                        # optional default</code></pre>
+<p>Several prompts (<code>prompt: [...]</code>, or <code>prompts:</code>) all look for the same class: YOLOE is asked for each, the boxes are named after the class, and boxes of one class overlapping by more than 60 % (two prompts finding the same object) are merged, keeping the most confident. A prompt may belong to one class only. Use it for synonyms ("car", "automobile"), kinds ("sedan", "hatchback") and looks ("a dog lying down").</p>
 <p>A bare list (<code>classes: [leaf, fruit]</code> or a top-level list) works too. Class ids follow the file's order. Imported boxes and detections are mapped onto these names (case-insensitive, through aliases); others are left out. Without a class file, every class is kept and models detect all they know.</p>
 <h2 id="fx-acquire-sources-blur-faces-false"><code>fx.acquire(sources, blur_faces=False)</code></h2>
 <p>Add sources (a list of <a href="sources.html"><code>fx.sources</code></a>; call again to add more). Nothing downloads yet. <code>blur_faces=True</code> puts <code>fx.transform.blur_faces()</code> first, so every image is blurred before any other step.</p>
@@ -52,6 +55,8 @@ confidence: 0.25                        # optional default</code></pre>
 <p>Images without a split get a stable 80 / 10 / 10 train / val / test split from their name; imported splits are kept. Returns <code>{"pairs", "path", "license", "splits", "licence_issues", "failed", "stopped", "sources"}</code>.</p>
 <h2 id="fx-reset"><code>fx.reset()</code></h2>
 <p>Forget the class file, sources and steps (start another dataset in the same program).</p>
+<h2 id="fx-use-device"><code>fx.use(device)</code></h2>
+<p>The device Felix's models run on when they don't name one: <code>"cpu"</code>, <code>"cuda"</code>, <code>"cuda:N"</code> (or <code>"N"</code>), <code>"mps"</code>, or <code>"auto"</code> / <code>None</code> (back to automatic). Takes effect at once; <code>with fx.use("cuda"):</code> sets it only inside the block, and <code>fx.use()</code> shows the current choice. First match wins: the model's own <code>device=</code> (<code>fx.models.yoloe(device="cuda")</code>), then <code>fx.use</code>, then the <code>FELIX_DEVICE</code> environment variable, then automatic (Ultralytics' choice; a Workflow model's own). A device that isn't on this machine raises an error at once; <code>"modal"</code> is a Workflow training device, not a Felix one. It applies to <code>fx.annotate</code> with the built-in models and with Workflow models, and isn't cleared by <code>fx.reset()</code>.</p>
 <h2 id="reading-and-managing-datasets">Reading and managing datasets</h2>
 <ul><li><code>fx.load(path)</code> → <code>Dataset</code>: a <code>.felix</code> file, a folder, a folder of shards, a single <code>.sh_felix</code>, or class folders. <code>len(ds)</code>, <code>ds.stems</code>, <code>ds.classes</code>, <code>ds.metadata</code>, <code>ds.task</code>, <code>ds.splits</code>, <code>ds.train</code> / <code>ds.val</code> / <code>ds.test</code>, <code>ds.annotation(stem)</code>, <code>ds.image(stem)</code> (a Pillow image), <code>ds.image_bytes(stem)</code>; shards also <code>ds.shards</code>, <code>ds.shard_of</code>, <code>ds.load_shard(i)</code> / <code>ds.release_shard(i)</code>.</li><li><code>fx.split(source, fraction=None, output=None, *, size=None, seed=0)</code>: a smaller copy (same share of every split and class).</li><li><code>fx.partition(source, output=None, parts=None, ratio=None, size=None, by_split=False, …)</code>: several smaller datasets.</li><li><code>fx.shard(source, output=None, *, size=None, shards=None)</code>: a folder of <code>.sh_felix</code> shards.</li></ul>
 <h2 id="errors">Errors</h2>
