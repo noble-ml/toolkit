@@ -33,6 +33,16 @@ img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin:.6rem 0
   query: plant leaves
   acquired: "2026-11-21T09:15:02Z"</code></pre>
 <p>Depending on the source: original URL and file name, dataset id, licence and its URL, author and their page, attribution text, the provider's usage terms, acquisition time, and for video frames the video file, frame number and time. Transforms and annotation add <code>history</code>; face blurring adds <code>privacy</code>.</p>
+<h2 id="what-the-dataset-is-for-use">What the dataset is for: <code>use</code></h2>
+<p><strong>Toddler words:</strong> before Felix picks up any picture, it reads the picture's rules. If the rules say "not for selling" or "share whatever you make from me", and you're making something you'll sell and keep to yourself, Felix doesn't pick it up at all.</p>
+<p><strong>Why you'd use it:</strong> you never end up with pictures you aren't allowed to use. The default is the safest case, a <strong>closed-source commercial</strong> product, so a dataset made without thinking about licences is still safe to use commercially.</p>
+<pre><code>fx.export("packages.felix")                        # use="commercial" (default)
+fx.export("packages.felix", use="open")            # also share-alike: for a dataset you'll release openly
+fx.export("packages.felix", use="research")        # also non-commercial
+fx.export("packages.felix", use="any")             # everything (licences are still recorded and checked)</code></pre>
+<table><thead><tr><th><code>use</code></th><th>takes</th><th>leaves out</th></tr></thead><tbody><tr><td><code>"commercial"</code> (default)</td><td>public domain, CC0, CC BY (credit kept), Pexels / Pixabay / Unsplash licences, your own files</td><td>non-commercial, no-derivatives, share-alike, unknown, all rights reserved</td></tr><tr><td><code>"open"</code></td><td>as above, plus share-alike (CC BY-SA)</td><td>non-commercial, no-derivatives, unknown, all rights reserved</td></tr><tr><td><code>"research"</code></td><td>as above, plus non-commercial and no-derivatives</td><td>unknown, all rights reserved</td></tr><tr><td><code>"any"</code></td><td>everything</td><td>nothing</td></tr></tbody></table>
+<p>Pictures that are left out are never downloaded. The export notes how many each source left out and why (e.g. <code>wikimedia: 30 left out for use='commercial': share-alike (CC BY-SA 4.0) ×30</code>), and the summary has <code>licence_skipped</code>. Search sources that can filter by licence ask only for fitting ones (Openverse). A picture whose licence you know but the source doesn't (<code>fx.sources.urls</code>, a video URL) can be given one with <code>license=</code>.</p>
+<p><strong>Watch out:</strong> share-alike is left out by default because anything built from it (the dataset) would have to be shared under the same licence, which a closed product can't do. Use <code>use="open"</code> with <code>license="auto"</code> to publish a share-alike dataset.</p>
 <h2 id="open-or-closed">Open or closed</h2>
 <p><strong>Toddler words:</strong> decide whether everyone may use your dataset (open) or only you (closed); Felix checks every picture's rules against that.</p>
 <pre><code>fx.export("leaves.felix")                          # closed (default)

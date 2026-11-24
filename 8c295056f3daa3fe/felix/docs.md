@@ -313,9 +313,81 @@ later. Each frame remembers its video, frame number and time.
 ```python
 fx.sources.video("./greenhouse.mp4", sampling=fx.sampling.auto())
 fx.sources.video("./drive.mp4", sampling=fx.sampling.interval(seconds=2))
+fx.sources.video("https://example.org/clip.mp4", license="CC0 1.0")      # a video on the web
 ```
 
-**Watch out:** video needs OpenCV: `pip install "felix[video]"`.
+**Watch out:** video needs OpenCV: `pip install "felix[video]"`. A video URL needs its `license=`, or the default
+`use="commercial"` leaves it out (its licence would be unknown).
+
+#### `fx.sources.pexels_videos`
+
+**Toddler words:** a library of free movie clips. Felix borrows the clips you ask for and keeps a few pages from each
+flip book.
+
+**Why you'd use it:** stock footage of everyday scenes (streets, doorsteps, people carrying boxes) gives many
+different places and lights. Free for commercial use.
+
+```python
+fx.sources.pexels_videos(query="package delivery", limit=500, per_video=20)
+fx.sources.pexels_videos(query=["parcel doorstep", "courier"], limit=600)    # several searches
+```
+
+**Watch out:** needs a Pexels key (`PEXELS_API_KEY`, the same as for photos); 200 requests an hour. `limit` counts
+frames, and `per_video` keeps one clip from filling the dataset.
+
+#### `fx.sources.pixabay_videos`
+
+**Toddler words:** another free clip library, with its own clips.
+
+**Why you'd use it:** more stock footage, free for commercial use with no credit required.
+
+```python
+fx.sources.pixabay_videos(query="cardboard box", limit=300)
+```
+
+**Watch out:** needs a free key (`PIXABAY_API_KEY`, from pixabay.com/api/docs). The API gives at most 500 videos per
+search.
+
+#### `fx.sources.wikimedia_videos`
+
+**Toddler words:** the encyclopedia's video shelf: clips people shared for everyone, each with a name to thank.
+
+**Why you'd use it:** free videos on almost any subject, no key needed.
+
+```python
+fx.sources.wikimedia_videos(query="cardboard box", limit=200)
+```
+
+**Watch out:** set `FELIX_CONTACT` first (Wikimedia's rule). Many Commons videos are share-alike, which the default
+`use="commercial"` leaves out; `fx.export(..., use="open")` takes them.
+
+#### `fx.sources.nasa_videos`
+
+**Toddler words:** NASA's movie shelf: rockets, rovers, astronauts and Earth from space.
+
+**Why you'd use it:** public footage with no key, for space, aviation and Earth imagery.
+
+```python
+fx.sources.nasa_videos(query="rover", limit=200, per_video=10)
+```
+
+**Watch out:** NASA doesn't say how long its videos are; `max_mb=150` (the file size, checked before downloading)
+keeps the long ones out.
+
+#### `fx.sources.archive_videos`
+
+**Toddler words:** a giant old library of films, from home movies to old newsreels. Felix only borrows the ones
+that say you may use them.
+
+**Why you'd use it:** lots of public-domain footage, no key needed, useful for unusual scenes and older cameras.
+
+```python
+fx.sources.archive_videos(query="delivery truck", limit=200)
+fx.sources.archive_videos(query="title:(parcel) AND year:[1950 TO 1970]")     # its own search syntax
+```
+
+**Watch out:** the Internet Archive's servers can be slow; a video that takes longer than 3 minutes to download is
+skipped and reported, and the source moves on.
 
 #### `fx.sources.camera`
 
@@ -915,31 +987,6 @@ fx.annotate(model=fx.models.sam)          # then outlines for them
 **Watch out:** it adds masks to existing boxes and never finds new objects; pictures without boxes are left as they
 are.
 
-#### `fx.use`
-
-**Toddler words:** tell Felix once which helper does the looking (the computer's brain, or a graphics card), so
-you don't have to say it again for every model.
-
-**Why you'd use it:** annotating thousands of pictures is much faster on a GPU. Without it, Ultralytics guesses.
-With `fx.use("cuda")` (or `"mps"` on a Mac) every model in the session uses it.
-
-```python
-fx.use("cuda")                                    # every fx.annotate from now on
-fx.annotate(model=fx.models.yoloe)                # → on the GPU
-fx.annotate(model=fx.models.sam(device="cpu"))    # a model's own device= still wins
-
-with fx.use("cpu"):                               # only inside the block
-    fx.annotate(model=fx.models.yolo26n)
-
-fx.use()                                          # what is it now, and where does that come from?
-```
-
-Setting `FELIX_DEVICE=cuda` in the environment does the same without touching the code, so one notebook runs on a
-laptop and on a GPU box unchanged.
-
-**Watch out:** asking for a device that isn't there fails straight away instead of quietly using the CPU.
-`"modal"` belongs to Workflow (cloud training), not Felix.
-
 ### Part 5 · Writing the dataset
 
 #### `fx.export`
@@ -955,6 +1002,15 @@ or you press Ctrl+C (the dataset is still closed properly).
 fx.export("./datasets/leaves.felix", pairs=None, license=None, title=None, authors=None, strict=False)
 fx.export("./datasets/leaves", license="CC-BY-4.0", title="Leaves", authors=["Ann Lee"])   # a folder, released openly
 fx.export("./datasets/leaves.sh_felix", shard_size=1000)   # a folder of shards
+```
+
+`use=` decides which pictures are taken at all: `"commercial"` (default, the safest: fine for a closed-source
+commercial product), `"open"` (also share-alike), `"research"` (also non-commercial) or `"any"`. Pictures whose licence
+doesn't fit are never downloaded, and the export says how many were left out and why.
+
+```python
+fx.export("packages.felix", pairs=2000)                         # closed, commercial-safe pictures only
+fx.export("packages.felix", license="auto", use="open")         # an open dataset, share-alike pictures allowed
 ```
 
 **Watch out:** `license=None` means closed (all rights reserved). For an open dataset, read the ⚠ lines in
@@ -1289,7 +1345,8 @@ Keys go in the call (`api_key=...`), in an environment variable, or in `~/.confi
 contact: you@example.com
 roboflow_api_key: ...
 unsplash_access_key: ...
-pexels_api_key: ...
+pexels_api_key: ...          # also pexels_videos
+pixabay_api_key: ...         # pixabay_videos
 flickr_api_key: ...
 api_data_gov_key: ...        # Smithsonian
 mapillary_token: ...
@@ -1300,7 +1357,8 @@ huggingface_token: hf_...    # only for gated / private datasets
 |---|---|---|
 | roboflow | `ROBOFLOW_API_KEY` | Roboflow → Settings → API Keys |
 | unsplash | `UNSPLASH_ACCESS_KEY` | unsplash.com/oauth/applications (Access Key) |
-| pexels | `PEXELS_API_KEY` | pexels.com/api |
+| pexels, pexels_videos | `PEXELS_API_KEY` | pexels.com/api |
+| pixabay_videos | `PIXABAY_API_KEY` | pixabay.com/api/docs (sign in; the key is shown there) |
 | flickr | `FLICKR_API_KEY` | flickr.com/services/api/keys |
 | smithsonian | `API_DATA_GOV_KEY` | api.data.gov/signup (works without, on a shared demo key) |
 | mapillary | `MAPILLARY_TOKEN` | mapillary.com/dashboard/developers (client token) |
@@ -1319,9 +1377,10 @@ huggingface_token: hf_...    # only for gated / private datasets
 - Photos stored sideways by a camera (EXIF rotation) are turned upright.
 - `license`: the images' licence if you know it; otherwise they are recorded as your own files.
 
-#### `fx.sources.video(path, sampling=fx.sampling.auto())`
-Frames of a video file (OpenCV: `pip install opencv-python`). Each frame records the video, frame number and time.
-See [Sampling](#sampling).
+#### `fx.sources.video(path, sampling=fx.sampling.auto(), license=None, attribution=None)`
+Frames of a video file or a video URL (OpenCV: `pip install opencv-python`). Each frame records the video, frame
+number and time. A local file counts as your own recording; for a URL, say its `license` (otherwise it is unknown,
+which the default `use="commercial"` leaves out). Downloaded videos are cached. See [Sampling](#sampling).
 
 #### `fx.sources.camera(device=0, sampling=fx.sampling.interval(seconds=1), count=None, duration=None)`
 A webcam / USB camera (`device=0, 1, …`) or a stream URL (`"rtsp://…"`, `"http://…/video.mjpg"`). Runs until `count`
@@ -1367,6 +1426,42 @@ credit is recorded. No query: Pexels' curated photos.
 Unsplash and Pexels photos are free to use, but both licences forbid compiling their photos into a similar or
 competing service; export flags them when you release a dataset openly.
 
+
+### Videos on the web
+
+Each of these searches a video site, downloads the videos whose licence fits `fx.export(use=...)` (the others are
+skipped before downloading) and samples them into frames like `fx.sources.video`. Shared options:
+
+- `limit`: frames in total; `per_video=20`: at most this many frames from one video, spread over its whole length;
+- `sampling`: `fx.sampling.auto()` (default: only when the scene changes), `interval(seconds=)` or `random(count=)`;
+- `max_height=720`: the version to download (the tallest one no taller than this); `max_seconds=600`: skip longer
+  videos (when the site says how long they are); `max_mb=150`: skip bigger files (checked before downloading); a
+  download slower than 3 minutes is skipped too, so one huge file never holds the source up.
+
+Videos are cached in `~/.cache/felix/videos` (`FELIX_VIDEO_CACHE_GB`, default 20): a re-run downloads nothing.
+
+#### `fx.sources.pexels_videos(query=None, limit=None, sampling=None, per_video=20, max_seconds=600, max_height=720, orientation=None, api_key=None)`
+Stock footage from Pexels, with the same key as `fx.sources.pexels`. Without a query: popular videos. Pexels License
+(free, commercial use allowed); the credit "Video by … on Pexels" is recorded.
+
+#### `fx.sources.pixabay_videos(query=None, limit=None, sampling=None, per_video=20, max_seconds=600, max_height=720, api_key=None)`
+Stock footage from Pixabay (key: `PIXABAY_API_KEY`). Without a query: popular videos. Pixabay Content License (free,
+commercial use allowed, no credit required; it is recorded anyway). The API pages through at most 500 videos per
+search.
+
+#### `fx.sources.wikimedia_videos(query=None, limit=None, sampling=None, per_video=20, max_seconds=600, max_height=720)`
+Videos from Wikimedia Commons, using Commons' own WebM versions. Freely licensed, but many are share-alike (left out
+by the default `use="commercial"`; `use="open"` takes them). Set `FELIX_CONTACT` first, as for `fx.sources.wikimedia`.
+Without a query: Felix's general vocabulary, a few videos per subject.
+
+#### `fx.sources.nasa_videos(query=None, limit=None, sampling=None, per_video=20, max_seconds=600, max_height=720)`
+Videos from the NASA Image and Video Library: generally not copyrighted in the US (some items are third-party; see
+NASA's media guidelines). NASA doesn't say how long a video is, so `max_mb` is what keeps long ones out.
+
+#### `fx.sources.archive_videos(query=None, limit=None, sampling=None, per_video=20, max_seconds=600, max_height=720, max_mb=150)`
+Videos from the Internet Archive that state a licence (public domain or Creative Commons), most downloaded first;
+its MPEG-4 versions are used. The query is Internet Archive search syntax (`"delivery truck"`,
+`title:(parcel) AND year:[1950 TO 1970]`). Its servers can be slow: slow downloads are skipped and reported.
 
 ### Open collections
 
@@ -1536,7 +1631,7 @@ model runs: `fx.models.yoloe(device="cpu")`. Ultralytics models are AGPL-3.0 (or
 images). Each box records its confidence and origin; each image records the model. An image the model fails on is
 marked `failed`, reported, and left out of the export.
 
-### `fx.export(path, pairs=None, *, license=None, title=None, authors=None, description=None, version=None, strict=False, shard_size=1000, overwrite=False, quiet=False)` → summary dict
+### `fx.export(path, pairs=None, *, license=None, title=None, authors=None, description=None, version=None, strict=False, shard_size=1000, overwrite=False, quiet=False, use="commercial")` → summary dict
 Runs everything and writes the dataset:
 - `path`: `name.felix` (one file), a folder, or `name.sh_felix` (the folder `name/` of shards, `shard_size` pairs each);
 - `pairs`: stop after this many image/annotation pairs; `None` = until the sources run out, or Ctrl+C / `kill`,
@@ -1544,22 +1639,18 @@ Runs everything and writes the dataset:
 - `license`: `None` (closed: all rights reserved for the compilation), an open licence id (`"CC-BY-4.0"`,
   `"CC-BY-SA-4.0"`, `"CC0-1.0"`, `"CC-BY-NC-4.0"`, `"ODbL-1.0"`, …) or `"auto"` (the most permissive one every image
   allows); `strict=True` leaves out images whose licence does not fit; see [Licences](#licences-and-provenance);
-- `title`, `authors`, `description`, `version`: for LICENSE.txt and CITATION.cff.
+- `title`, `authors`, `description`, `version`: for LICENSE.txt and CITATION.cff;
+- `use`: what the dataset is for, which decides the image licences taken at all (the rest is skipped before it is
+  downloaded and counted in a note): `"commercial"` (default, the safest: fits a closed-source commercial product,
+  so public domain / CC0, CC BY, Pexels / Pixabay / Unsplash licences and your own files), `"open"` (also
+  share-alike), `"research"` (also non-commercial), `"any"` (everything; licences still recorded). See
+  [Licences](#what-the-dataset-is-for-use).
 
 Images without a split get a stable 80 / 10 / 10 train / val / test split from their name; imported splits are kept.
-Returns `{"pairs", "path", "license", "splits", "licence_issues", "failed", "stopped", "sources"}`.
+Returns `{"pairs", "path", "license", "splits", "licence_issues", "use", "licence_skipped", "failed", "stopped", "sources"}`.
 
 ### `fx.reset()`
 Forget the class file, sources and steps (start another dataset in the same program).
-
-### `fx.use(device)`
-The device Felix's models run on when they don't name one: `"cpu"`, `"cuda"`, `"cuda:N"` (or `"N"`), `"mps"`, or
-`"auto"` / `None` (back to automatic). Takes effect at once; `with fx.use("cuda"):` sets it only inside the block, and
-`fx.use()` shows the current choice. First match wins: the model's own `device=` (`fx.models.yoloe(device="cuda")`),
-then `fx.use`, then the `FELIX_DEVICE` environment variable, then automatic (Ultralytics' choice; a Workflow model's
-own). A device that isn't on this machine raises an error at once; `"modal"` is a Workflow training device, not a
-Felix one. It applies to `fx.annotate` with the built-in models and with Workflow models, and isn't cleared by
-`fx.reset()`.
 
 ### Reading and managing datasets
 - `fx.load(path)` → `Dataset`: a `.felix` file, a folder, a folder of shards, a single `.sh_felix`, or class folders.
@@ -1606,6 +1697,39 @@ source:
 Depending on the source: original URL and file name, dataset id, licence and its URL, author and their page,
 attribution text, the provider's usage terms, acquisition time, and for video frames the video file, frame number and
 time. Transforms and annotation add `history`; face blurring adds `privacy`.
+
+### What the dataset is for: `use`
+
+**Toddler words:** before Felix picks up any picture, it reads the picture's rules. If the rules say "not for
+selling" or "share whatever you make from me", and you're making something you'll sell and keep to yourself,
+Felix doesn't pick it up at all.
+
+**Why you'd use it:** you never end up with pictures you aren't allowed to use. The default is the safest case, a
+**closed-source commercial** product, so a dataset made without thinking about licences is still safe to use
+commercially.
+
+```python
+fx.export("packages.felix")                        # use="commercial" (default)
+fx.export("packages.felix", use="open")            # also share-alike: for a dataset you'll release openly
+fx.export("packages.felix", use="research")        # also non-commercial
+fx.export("packages.felix", use="any")             # everything (licences are still recorded and checked)
+```
+
+| `use` | takes | leaves out |
+|---|---|---|
+| `"commercial"` (default) | public domain, CC0, CC BY (credit kept), Pexels / Pixabay / Unsplash licences, your own files | non-commercial, no-derivatives, share-alike, unknown, all rights reserved |
+| `"open"` | as above, plus share-alike (CC BY-SA) | non-commercial, no-derivatives, unknown, all rights reserved |
+| `"research"` | as above, plus non-commercial and no-derivatives | unknown, all rights reserved |
+| `"any"` | everything | nothing |
+
+Pictures that are left out are never downloaded. The export notes how many each source left out and why (e.g.
+`wikimedia: 30 left out for use='commercial': share-alike (CC BY-SA 4.0) ×30`), and the summary has
+`licence_skipped`. Search sources that can filter by licence ask only for fitting ones (Openverse). A picture whose
+licence you know but the source doesn't (`fx.sources.urls`, a video URL) can be given one with `license=`.
+
+**Watch out:** share-alike is left out by default because anything built from it (the dataset) would have to be
+shared under the same licence, which a closed product can't do. Use `use="open"` with `license="auto"` to publish a
+share-alike dataset.
 
 ### Open or closed
 

@@ -681,37 +681,6 @@ model.device()            # which one am I on?
 
 **Watch out:** if you ask for a GPU that isn't there, you get an error saying why, never a silent switch to CPU.
 
-#### `wf.use`
-
-**Toddler words:** say once which helper does the maths, and every training and prediction after that uses it,
-without you repeating `device=` each time.
-
-**Why you'd use it:** you put one line at the top of the notebook, `wf.use("modal:a100")` or `wf.use("cuda")`, and
-the rest of the code doesn't mention devices at all. Changing that one line moves everything.
-
-```python
-wf.use("cuda")                                 # train and predict on the GPU
-wf.use("modal:a100")                           # train on a Modal A100; predict here ("auto")
-wf.use(train="modal:h100", run="mps")          # or say each part on its own
-model.train(data, epochs=100)                  # → the device from wf.use
-
-with wf.use("cpu"):                            # only inside the block
-    model.train(small, epochs=1)
-
-wf.use()                                       # what is it now, and where does that come from?
-wf.use(None)                                   # back to "auto"
-```
-
-Who wins, first match: the call's own `device=`, then the model's (`model.device(...)`, or a `device=` you passed it
-before), then `wf.use`, then the `WORKFLOW_TRAIN_DEVICE` / `WORKFLOW_DEVICE` environment variables, then `"auto"`.
-The training panel says where the device came from, e.g. `cuda (from wf.use)`. With `WORKFLOW_DEVICE=modal:a100` set
-outside the code, the same notebook trains locally on your Mac and on Modal without changing a line.
-
-**Watch out:**
-- A Modal device only changes **training**: predictions and evaluations keep running on this machine, so they
-  never quietly become paid cloud calls.
-- A device that isn't on this machine fails at `wf.use`, not later in the middle of a notebook.
-
 #### `wf.Modal`
 
 **Toddler words:** your computer is small, so you borrow a giant one in the cloud for a while. You hand it the
@@ -740,8 +709,12 @@ Set it up once: `pip install modal`, then `modal token new` to sign in. Nothing 
 **Watch out:**
 - Modal bills the GPU time to your account, and GPUs need a payment method on file (Workflow tells you if one is
   missing).
-- Ctrl+C stops the remote run and still brings back `last.nbm`. If your connection drops first, copy the checkpoints
-  back with `wf.Modal.pull("RUN")`. Workflow prints the run name when it starts.
+- It looks just like training here: an upload bar the first time, then the same live training bar and epoch table
+  (drawn from the Modal machine), in a terminal or a notebook.
+- Ctrl+C works as it does locally: the run on Modal saves after its current step and stops, and `last.nbm` comes back
+  so training again continues at that exact step. A second Ctrl+C stops at once (the autosave is still kept). If your
+  connection drops, copy the checkpoints back with `wf.Modal.pull("RUN")`. Workflow prints the run name when it
+  starts.
 - A run can last at most 24 hours (`hours=`). After that, train the returned model again and it continues where it
   stopped.
 - `"modal"` is for training only. Predict and evaluate on your own machine.
@@ -939,7 +912,7 @@ workflow init detector.ipynb --dataset data.felix --img-size 256 --epochs 30 --d
 workflow init detector.ipynb --device modal:A100     # train on a Modal cloud GPU, evaluate here
 ```
 
-The notebook picks its device once at the top (`wf.use(DEVICE)`), so changing that one line moves the whole notebook.
+With a Modal device the notebook trains on Modal and evaluates on this machine (`EVAL_DEVICE`).
 
 **Watch out:** the image size must be a multiple of 32 (the starter model halves the picture four times). A
 misspelt `--device` is caught when the notebook is written; whether the device exists is checked where the notebook
@@ -1117,7 +1090,6 @@ Input channels are always worked out from the line above. `padding="same"` keeps
 |---|---|---|---|
 | `model.summary()` | prints every layer with its output shape, parameters and MACs (multiply-adds) | `input=` (another picture size), `show=True` | `model.summary()` |
 | `model.train(...)` | trains on a Felix split; live bar and per-epoch table; saves `last.nbm` / `best.nbm` | `train`, `validation=`, `epochs=100`, `batch_size=16`, `lr=1e-3`, `device=`, `img_size=`, `optimizer="adamw"`, `patience=30`, `save_every=5`, `output="runs/train"`, `quantization=`, `augment=True`, `ema=True`, `low_memory=None` (recompute to save memory; auto on CPU), `autosave=10` (minutes) | `model.train(data.train, validation=data.val, epochs=50, batch_size=16, device="mps")` |
-| `wf.use(...)` | the device every call without `device=` uses: `train` for training, `run` for predict / eval / inference (a Modal device sets only `train`); also `with wf.use(...):` | `device`, `train=`, `run=`; `None` resets | `wf.use("modal:a100")` · `wf.use("cuda")` |
 | `wf.Modal(...)` | trains on a Modal cloud GPU instead of this machine (pass as `device=`, or the string `"modal"` / `"modal:A100"`); the dataset is uploaded once, the checkpoints come back into `output` | `gpu="L4"` (T4, A10G, L40S, A100, H100, … or `"cpu"`), `hours=24`, `volume="workflow"`, `cpus=` (8 next to a GPU, 16 for `"cpu"`) | `model.train(data, epochs=100, device="modal:A100")` |
 | `wf.eval(model)` | size, FLOPs, latency, FPS, memory; with `dataset=` also mAP, precision, recall | `dataset=None`, `device=`, `img_size=`, `batch_size=8`, `confidence=0.001`, `iou=0.6` | `wf.eval(model, dataset=data.test)` |
 | `model.save(path)` / `wf.load(path)` | saves / loads a `.nbm` (weights, training state, class names) | the path | `model.save("detector.nbm")` |
@@ -1950,7 +1922,7 @@ own splits are used.
 | `epochs` | 100 | **total** target epoch count (see Continuing) |
 | `batch_size` | 16 | images per step |
 | `lr` | 1e-3 | peak learning rate |
-| `device` | auto | `"cpu"`, `"cuda"`, `"gpu"`, `"mps"`; unavailable devices raise an error instead of falling back silently. `"modal"`, `"modal:A100"` or `wf.Modal(...)` trains on a Modal cloud GPU ([Devices](#modal-cloud-gpus)). Not given: `wf.use(...)`, then `WORKFLOW_DEVICE`, then auto |
+| `device` | auto | `"cpu"`, `"cuda"`, `"gpu"`, `"mps"`; unavailable devices raise an error instead of falling back silently. `"modal"`, `"modal:A100"` or `wf.Modal(...)` trains on a Modal cloud GPU ([Devices](#modal-cloud-gpus)). |
 | `img_size` | the model's input | training size |
 | `optimizer` | `"adamw"` | or `"sgd"` (momentum 0.937) |
 | `patience` | 30 | stop after this many epochs without improvement (`None` disables) |
@@ -2241,30 +2213,6 @@ workflow devices                               # what this machine has, and why 
 A requested device that isn't available raises a `DeviceError` explaining why (no driver, no MLX, no GPU) and
 what to do. Workflow never silently runs on another device than the one you asked for.
 
-### Choosing the device once: `wf.use`
-
-```python
-wf.use("cuda")                                  # train and predict on CUDA
-wf.use("modal:a100")                            # train on Modal; predict / evaluate here ("auto")
-wf.use(train="modal:h100", run="mps")
-with wf.use("cpu"): ...                         # only inside the block
-wf.use()                                        # the current choice and where it comes from
-wf.use(None)                                    # back to the defaults
-```
-
-Two settings: `train` (`model.train`, `wf.fine_tune`) and `run` (predict, evaluate, inference). `wf.use(device)`
-sets both, except a Modal device, which sets only `train`. First match wins:
-
-1. the call's own `device=` argument
-2. the model's device: `model.device(...)`, or a `device=` passed to an earlier call on that model
-3. `wf.use(...)`
-4. the environment: `WORKFLOW_TRAIN_DEVICE` (training), `WORKFLOW_DEVICE` (both; a Modal value only for training)
-5. `"auto"`
-
-`wf.use` checks the device straight away (an unavailable one raises `DeviceError` then), and the training panel shows
-where a device came from when it wasn't the call's own (`cpu (from wf.use)`). Felix has the same for its models:
-`fx.use("cuda")`.
-
 ### Modal (cloud GPUs)
 
 `model.train` and `wf.fine_tune` can run on [Modal](https://modal.com)'s GPUs, so a Mac or a laptop can train
@@ -2290,6 +2238,9 @@ wf.Modal.pull("20261123-120222-828431", output="runs/train")   # a run whose con
   trains.
 - **Code:** the container runs the locally installed `workflow` (and `felix`) packages, so the remote code is exactly
   your version. Python matches your local version.
+- **What you see:** an upload bar (bytes and speed) when the dataset goes up, then the remote training panel redrawn
+  here live, the same bar and epoch table as a local run (Modal's own progress output is not shown). Ctrl+C asks the
+  remote training to save after its current step and stop, like a local Ctrl+C; a second one stops it at once.
 - **Checkpoints:** written to the Volume under `runs/RUN` as training goes (autosave included), then copied into
   `output`. After the run the local model holds the trained weights and training state, as after a local run. Ctrl+C,
   an error or the time limit (`hours`, at most 24) still bring back `last.nbm`; training it again continues there.
@@ -2393,7 +2344,7 @@ workflow eval MODEL.nbm [--dataset D --split test]   size/FLOPs/FPS, plus accura
 workflow quantize MODEL.nbm int8|fp16|fp32 [--calibration D] [-o OUT]   post-training quantisation
 workflow export MODEL.nbm --format onnx|nbm [--precision ...] [-o OUT]
 workflow script MODEL.nbm --preset image|folder|video|webcam    write an inference script
-workflow devices                               cpu / cuda / mps / modal, why something is unavailable, the default
+workflow devices                               cpu / cuda / mps / modal, and why something is unavailable
 workflow library [SEARCH]                     browse every layer, block and tool; type to search
 ```
 
@@ -2466,7 +2417,7 @@ Writes a Jupyter notebook that runs top to bottom:
 | `--dataset` | `practice_shapes.felix` | made by the notebook on first run if it doesn't exist |
 | `--img-size` | 256 | a multiple of 32, at least 64 |
 | `--epochs` | 30 | |
-| `--device` | `auto` | `cpu`, `cuda`, `gpu`, `mps`, or `modal` / `modal:A100` (training on a Modal cloud GPU; evaluation stays local). The notebook sets it once with `wf.use(DEVICE)` |
+| `--device` | `auto` | `cpu`, `cuda`, `gpu`, `mps`, or `modal` / `modal:A100` (training on a Modal cloud GPU; evaluation stays local). |
 | `--overwrite` | off | replace an existing notebook |
 
 Open it with Jupyter, VS Code or Colab.
@@ -2485,7 +2436,7 @@ unless you pass `--overwrite`.
 | `video` | a video with live preview, optional `--save out.mp4` | `python infer_video.py clip.mp4` |
 | `webcam` | live camera detection (`--mirror` for selfie view) | `python infer_webcam.py` |
 
-All take `--confidence`, `--iou`, `--img-size` and `--device` (default: `WORKFLOW_DEVICE` if set, else auto). `video` and `webcam` need `opencv-python`.
+All take `--confidence`, `--iou`, `--img-size` and `--device`. `video` and `webcam` need `opencv-python`.
 
 ### What a model detects: `workflow labels`
 
@@ -2510,15 +2461,13 @@ It reads only the file's metadata (no weights are loaded), so it is instant even
   Ctrl+C, errors and the 24-hour limit lose nothing, and `wf.Modal.pull(run)` fetches them later. `wf.fine_tune` works
   too. On the remote machine the dataset is copied to local disk first, and 8 CPU cores are reserved for decoding.
   See [Devices](#modal-cloud-gpus).
-- **`wf.use(device)`**: choose the device once (`wf.use("cuda")`, `wf.use("modal:a100")`,
-  `wf.use(train=..., run=...)`, or `with wf.use(...):`). Calls without `device=` use it. The environment variables
-  `WORKFLOW_DEVICE` / `WORKFLOW_TRAIN_DEVICE` do the same outside the code. A Modal device changes only training. The
-  training panel shows where the device came from. See [Devices](#choosing-the-device-once-wfuse).
-- **CLI**: `workflow init --device modal:A100` (the notebook now sets its device once with `wf.use(DEVICE)`, so
-  evaluation stays local while training goes to Modal; a misspelt device is caught when the notebook is written).
-  `workflow devices` also shows Modal (installed, signed in) and the current default with where it comes from.
-  Generated scripts and `workflow predict` / `eval` follow `WORKFLOW_DEVICE` when `--device` isn't given.
-- A `device=` left out no longer pins the model to `"auto"`'s choice for later calls; only devices you name stick.
+  A Modal run looks like a local one: an upload bar, then the remote training panel redrawn here live; Ctrl+C makes
+  the remote run save after its step and stop, as locally.
+- `wf.practice_dataset` with more than about 1,000 pictures produced pictures without boxes (Felix missed its COCO
+  file); fixed in Felix 1.3.1, and the practice file now lists its classes first.
+- **CLI**: `workflow init --device modal:A100` writes a notebook that trains on Modal and evaluates on this machine
+  (a misspelt device is caught when the notebook is written). `workflow devices` also shows Modal (installed,
+  signed in).
 
 ### 0.7.1
 

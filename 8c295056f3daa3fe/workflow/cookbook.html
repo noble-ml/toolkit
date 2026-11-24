@@ -232,22 +232,6 @@ wf.head(classes=10, channels=512, type="cls")     # classification; channels=512
 <pre><code>model.device("cuda")      # or "cpu", "gpu", "mps", "auto"
 model.device()            # which one am I on?</code></pre>
 <p><strong>Watch out:</strong> if you ask for a GPU that isn't there, you get an error saying why, never a silent switch to CPU.</p>
-<h3 id="wf-use"><code>wf.use</code></h3>
-<p><strong>Toddler words:</strong> say once which helper does the maths, and every training and prediction after that uses it, without you repeating <code>device=</code> each time.</p>
-<p><strong>Why you'd use it:</strong> you put one line at the top of the notebook, <code>wf.use("modal:a100")</code> or <code>wf.use("cuda")</code>, and the rest of the code doesn't mention devices at all. Changing that one line moves everything.</p>
-<pre><code>wf.use("cuda")                                 # train and predict on the GPU
-wf.use("modal:a100")                           # train on a Modal A100; predict here ("auto")
-wf.use(train="modal:h100", run="mps")          # or say each part on its own
-model.train(data, epochs=100)                  # → the device from wf.use
-
-with wf.use("cpu"):                            # only inside the block
-    model.train(small, epochs=1)
-
-wf.use()                                       # what is it now, and where does that come from?
-wf.use(None)                                   # back to "auto"</code></pre>
-<p>Who wins, first match: the call's own <code>device=</code>, then the model's (<code>model.device(...)</code>, or a <code>device=</code> you passed it before), then <code>wf.use</code>, then the <code>WORKFLOW_TRAIN_DEVICE</code> / <code>WORKFLOW_DEVICE</code> environment variables, then <code>"auto"</code>. The training panel says where the device came from, e.g. <code>cuda (from wf.use)</code>. With <code>WORKFLOW_DEVICE=modal:a100</code> set outside the code, the same notebook trains locally on your Mac and on Modal without changing a line.</p>
-<p><strong>Watch out:</strong></p>
-<ul><li>A Modal device only changes <strong>training</strong>: predictions and evaluations keep running on this machine, so they never quietly become paid cloud calls.</li><li>A device that isn't on this machine fails at <code>wf.use</code>, not later in the middle of a notebook.</li></ul>
 <h3 id="wf-modal"><code>wf.Modal</code></h3>
 <p><strong>Toddler words:</strong> your computer is small, so you borrow a giant one in the cloud for a while. You hand it the pictures and the brain, it does the learning on a big graphics card, and gives the brain back, cleverer.</p>
 <p><strong>Why you'd use it:</strong> you have no NVIDIA GPU (a Mac, a laptop), or yours is too small or too slow. <a href="https://modal.com">Modal</a> rents GPUs by the second, and Workflow sends the work there with one word. It's the same training (same code, same maths, fp32), only on a faster machine.</p>
@@ -259,7 +243,7 @@ wf.fine_tune("best.nbm", new_data, device="modal")         # fine-tuning too</co
 <p>Set it up once: <code>pip install modal</code>, then <code>modal token new</code> to sign in. Nothing else is manual:</p>
 <ul><li><strong>The data goes where the training is, by itself.</strong> The first run uploads the dataset to a Modal Volume called <code>workflow</code>. Later runs reuse it while the dataset is unchanged, so only the model (a few MB) goes up each time.</li><li><strong>On the remote machine,</strong> the dataset is copied from the Volume onto the machine's own fast disk before the first epoch. 8 CPU cores are reserved to decode pictures while the GPU learns, so the GPU isn't left waiting.</li><li><strong>Afterwards,</strong> the checkpoints are saved on the Volume during training and come back into <code>output</code> at the end, so <code>model</code> holds the trained weights, just as after a local run.</li></ul>
 <p><strong>Watch out:</strong></p>
-<ul><li>Modal bills the GPU time to your account, and GPUs need a payment method on file (Workflow tells you if one is missing).</li><li>Ctrl+C stops the remote run and still brings back <code>last.nbm</code>. If your connection drops first, copy the checkpoints back with <code>wf.Modal.pull("RUN")</code>. Workflow prints the run name when it starts.</li><li>A run can last at most 24 hours (<code>hours=</code>). After that, train the returned model again and it continues where it stopped.</li><li><code>"modal"</code> is for training only. Predict and evaluate on your own machine.</li></ul>
+<ul><li>Modal bills the GPU time to your account, and GPUs need a payment method on file (Workflow tells you if one is missing).</li><li>It looks just like training here: an upload bar the first time, then the same live training bar and epoch table (drawn from the Modal machine), in a terminal or a notebook.</li><li>Ctrl+C works as it does locally: the run on Modal saves after its current step and stops, and <code>last.nbm</code> comes back so training again continues at that exact step. A second Ctrl+C stops at once (the autosave is still kept). If your connection drops, copy the checkpoints back with <code>wf.Modal.pull("RUN")</code>. Workflow prints the run name when it starts.</li><li>A run can last at most 24 hours (<code>hours=</code>). After that, train the returned model again and it continues where it stopped.</li><li><code>"modal"</code> is for training only. Predict and evaluate on your own machine.</li></ul>
 <h3 id="model-train"><code>model.train</code></h3>
 <p><strong>Toddler words:</strong> look at lots of pictures and their answers, again and again, until you get good. Press Ctrl+C and it saves before stopping. It also saves by itself every 10 minutes, so if the computer crashes or the power goes out, you lose minutes, not hours: load <code>last.nbm</code> and train again, and it carries on from the same step.</p>
 <p><strong>Why you'd use it:</strong> this is learning. The defaults (optimizer, learning-rate schedule, loss, augmentation, checkpoints) are sensible, so most of the time you only set the data and <code>epochs</code>.</p>
@@ -337,7 +321,7 @@ r.show()</code></pre>
 <p><strong>Why you'd use it:</strong> the fastest way to start a new detector, or to show someone how Workflow fits together. Every step is a cell you can read and change; the model is a flat list of layers you can grow. Without a dataset it makes a practice one, so the first run always works.</p>
 <pre><code>workflow init detector.ipynb --dataset data.felix --img-size 256 --epochs 30 --device auto
 workflow init detector.ipynb --device modal:A100     # train on a Modal cloud GPU, evaluate here</code></pre>
-<p>The notebook picks its device once at the top (<code>wf.use(DEVICE)</code>), so changing that one line moves the whole notebook.</p>
+<p>With a Modal device the notebook trains on Modal and evaluates on this machine (<code>EVAL_DEVICE</code>).</p>
 <p><strong>Watch out:</strong> the image size must be a multiple of 32 (the starter model halves the picture four times). A misspelt <code>--device</code> is caught when the notebook is written; whether the device exists is checked where the notebook runs, so a notebook made on a Mac with <code>--device cuda</code> works on a GPU box.</p>
 <h3 id="workflow-commands">Workflow commands</h3>
 <p><strong>Toddler words:</strong> the same tools, typed in the terminal.</p>

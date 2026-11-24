@@ -69,8 +69,36 @@ fx.sources.local("./bought-photos", license="CC BY 4.0")      # say the licence 
 <p><strong>Toddler words:</strong> a flip book. A video is thousands of pictures in a row; Felix keeps some pages, not all.</p>
 <p><strong>Why you'd use it:</strong> your own footage (a greenhouse walk, a dashcam) is the closest thing to what the model will see later. Each frame remembers its video, frame number and time.</p>
 <pre><code>fx.sources.video("./greenhouse.mp4", sampling=fx.sampling.auto())
-fx.sources.video("./drive.mp4", sampling=fx.sampling.interval(seconds=2))</code></pre>
-<p><strong>Watch out:</strong> video needs OpenCV: <code>pip install "felix[video]"</code>.</p>
+fx.sources.video("./drive.mp4", sampling=fx.sampling.interval(seconds=2))
+fx.sources.video("https://example.org/clip.mp4", license="CC0 1.0")      # a video on the web</code></pre>
+<p><strong>Watch out:</strong> video needs OpenCV: <code>pip install "felix[video]"</code>. A video URL needs its <code>license=</code>, or the default <code>use="commercial"</code> leaves it out (its licence would be unknown).</p>
+<h3 id="fx-sources-pexels-videos"><code>fx.sources.pexels_videos</code></h3>
+<p><strong>Toddler words:</strong> a library of free movie clips. Felix borrows the clips you ask for and keeps a few pages from each flip book.</p>
+<p><strong>Why you'd use it:</strong> stock footage of everyday scenes (streets, doorsteps, people carrying boxes) gives many different places and lights. Free for commercial use.</p>
+<pre><code>fx.sources.pexels_videos(query="package delivery", limit=500, per_video=20)
+fx.sources.pexels_videos(query=["parcel doorstep", "courier"], limit=600)    # several searches</code></pre>
+<p><strong>Watch out:</strong> needs a Pexels key (<code>PEXELS_API_KEY</code>, the same as for photos); 200 requests an hour. <code>limit</code> counts frames, and <code>per_video</code> keeps one clip from filling the dataset.</p>
+<h3 id="fx-sources-pixabay-videos"><code>fx.sources.pixabay_videos</code></h3>
+<p><strong>Toddler words:</strong> another free clip library, with its own clips.</p>
+<p><strong>Why you'd use it:</strong> more stock footage, free for commercial use with no credit required.</p>
+<pre><code>fx.sources.pixabay_videos(query="cardboard box", limit=300)</code></pre>
+<p><strong>Watch out:</strong> needs a free key (<code>PIXABAY_API_KEY</code>, from pixabay.com/api/docs). The API gives at most 500 videos per search.</p>
+<h3 id="fx-sources-wikimedia-videos"><code>fx.sources.wikimedia_videos</code></h3>
+<p><strong>Toddler words:</strong> the encyclopedia's video shelf: clips people shared for everyone, each with a name to thank.</p>
+<p><strong>Why you'd use it:</strong> free videos on almost any subject, no key needed.</p>
+<pre><code>fx.sources.wikimedia_videos(query="cardboard box", limit=200)</code></pre>
+<p><strong>Watch out:</strong> set <code>FELIX_CONTACT</code> first (Wikimedia's rule). Many Commons videos are share-alike, which the default <code>use="commercial"</code> leaves out; <code>fx.export(..., use="open")</code> takes them.</p>
+<h3 id="fx-sources-nasa-videos"><code>fx.sources.nasa_videos</code></h3>
+<p><strong>Toddler words:</strong> NASA's movie shelf: rockets, rovers, astronauts and Earth from space.</p>
+<p><strong>Why you'd use it:</strong> public footage with no key, for space, aviation and Earth imagery.</p>
+<pre><code>fx.sources.nasa_videos(query="rover", limit=200, per_video=10)</code></pre>
+<p><strong>Watch out:</strong> NASA doesn't say how long its videos are; <code>max_mb=150</code> (the file size, checked before downloading) keeps the long ones out.</p>
+<h3 id="fx-sources-archive-videos"><code>fx.sources.archive_videos</code></h3>
+<p><strong>Toddler words:</strong> a giant old library of films, from home movies to old newsreels. Felix only borrows the ones that say you may use them.</p>
+<p><strong>Why you'd use it:</strong> lots of public-domain footage, no key needed, useful for unusual scenes and older cameras.</p>
+<pre><code>fx.sources.archive_videos(query="delivery truck", limit=200)
+fx.sources.archive_videos(query="title:(parcel) AND year:[1950 TO 1970]")     # its own search syntax</code></pre>
+<p><strong>Watch out:</strong> the Internet Archive's servers can be slow; a video that takes longer than 3 minutes to download is skipped and reported, and the source moves on.</p>
 <h3 id="fx-sources-camera"><code>fx.sources.camera</code></h3>
 <p><strong>Toddler words:</strong> a camera that keeps taking pictures while you watch, and Felix keeps the good ones.</p>
 <p><strong>Why you'd use it:</strong> collect data live from a webcam, a USB camera or a network stream, right where the model will be used.</p>
@@ -319,19 +347,6 @@ fx.annotate(model=fx.models.yoloe("yoloe-26l-seg.pt"))   # larger: better on har
 <pre><code>fx.annotate(model=fx.models.yoloe)        # boxes first
 fx.annotate(model=fx.models.sam)          # then outlines for them</code></pre>
 <p><strong>Watch out:</strong> it adds masks to existing boxes and never finds new objects; pictures without boxes are left as they are.</p>
-<h3 id="fx-use"><code>fx.use</code></h3>
-<p><strong>Toddler words:</strong> tell Felix once which helper does the looking (the computer's brain, or a graphics card), so you don't have to say it again for every model.</p>
-<p><strong>Why you'd use it:</strong> annotating thousands of pictures is much faster on a GPU. Without it, Ultralytics guesses. With <code>fx.use("cuda")</code> (or <code>"mps"</code> on a Mac) every model in the session uses it.</p>
-<pre><code>fx.use("cuda")                                    # every fx.annotate from now on
-fx.annotate(model=fx.models.yoloe)                # → on the GPU
-fx.annotate(model=fx.models.sam(device="cpu"))    # a model's own device= still wins
-
-with fx.use("cpu"):                               # only inside the block
-    fx.annotate(model=fx.models.yolo26n)
-
-fx.use()                                          # what is it now, and where does that come from?</code></pre>
-<p>Setting <code>FELIX_DEVICE=cuda</code> in the environment does the same without touching the code, so one notebook runs on a laptop and on a GPU box unchanged.</p>
-<p><strong>Watch out:</strong> asking for a device that isn't there fails straight away instead of quietly using the CPU. <code>"modal"</code> belongs to Workflow (cloud training), not Felix.</p>
 <h2 id="part-5-writing-the-dataset">Part 5 · Writing the dataset</h2>
 <h3 id="fx-export"><code>fx.export</code></h3>
 <p><strong>Toddler words:</strong> pack the box and write the label on it: what's inside, where each picture came from, and who may use it.</p>
@@ -339,6 +354,9 @@ fx.use()                                          # what is it now, and where do
 <pre><code>fx.export("./datasets/leaves.felix", pairs=None, license=None, title=None, authors=None, strict=False)
 fx.export("./datasets/leaves", license="CC-BY-4.0", title="Leaves", authors=["Ann Lee"])   # a folder, released openly
 fx.export("./datasets/leaves.sh_felix", shard_size=1000)   # a folder of shards</code></pre>
+<p><code>use=</code> decides which pictures are taken at all: <code>"commercial"</code> (default, the safest: fine for a closed-source commercial product), <code>"open"</code> (also share-alike), <code>"research"</code> (also non-commercial) or <code>"any"</code>. Pictures whose licence doesn't fit are never downloaded, and the export says how many were left out and why.</p>
+<pre><code>fx.export("packages.felix", pairs=2000)                         # closed, commercial-safe pictures only
+fx.export("packages.felix", license="auto", use="open")         # an open dataset, share-alike pictures allowed</code></pre>
 <p><strong>Watch out:</strong> <code>license=None</code> means closed (all rights reserved). For an open dataset, read the ⚠ lines in ATTRIBUTIONS.md, or use <code>license="auto"</code> (the most open licence every picture allows) and <code>strict=True</code> (leave out pictures that don't fit). See <a href="licensing.html">Licences</a>.</p>
 <h3 id="fx-load-and-its-splits"><code>fx.load</code> and its splits</h3>
 <p><strong>Toddler words:</strong> open the box. It already has three piles: <code>train</code> (learn from these), <code>val</code> (check while learning), <code>test</code> (the final exam).</p>
